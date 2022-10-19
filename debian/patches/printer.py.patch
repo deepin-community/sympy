@@ -1,0 +1,21 @@
+define a __globals__ attribute in wrapper _PrintFunction
+to close Debian bug #980707
+Index: sympy/sympy/printing/printer.py
+===================================================================
+--- sympy.orig/sympy/printing/printer.py
++++ sympy/sympy/printing/printer.py
+@@ -356,6 +356,14 @@ class _PrintFunction:
+         params = list(inspect.signature(f).parameters.values())
+         assert params.pop(-1).kind == inspect.Parameter.VAR_KEYWORD
+         self.__other_params = params
++        
++        # define the __globals__ attribute to fix Debian bug #980707
++        # which touches the package octave-symbolic
++        #
++        if hasattr(f, "__globals__"):
++            self.__globals__ = f.__globals__
++        else:
++            self.__globals__ = []
+ 
+         self.__print_cls = print_cls
+         update_wrapper(self, f)
