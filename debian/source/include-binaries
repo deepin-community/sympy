@@ -1,0 +1,7 @@
+# intersphinx inventories downloaded from:
+# https://matplotlib.org/stable/objects.inv
+# https://mpmath.org/doc/current/objects.inv
+# https://docs.scipy.org/doc/scipy/objects.inv
+# https://numpy.org/doc/stable/objects.inv
+
+debian/intersphinx-inventories.tgz
