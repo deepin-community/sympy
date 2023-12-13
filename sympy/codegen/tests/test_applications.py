@@ -3,7 +3,7 @@
 import tempfile
 
 from sympy.external import import_module
-from sympy.printing import ccode
+from sympy.printing.codeprinter import ccode
 from sympy.utilities._compilation import compile_link_import_strings, has_c
 from sympy.utilities._compilation.util import may_xfail
 from sympy.testing.pytest import skip
@@ -26,7 +26,7 @@ def _mk_func1():
 
 
 def _render_compile_import(funcdef, build_dir):
-    code_str = render_as_source_file(funcdef, settings=dict(contract=False))
+    code_str = render_as_source_file(funcdef, settings={"contract": False})
     declar = ccode(FunctionPrototype.from_FunctionDefinition(funcdef))
     return compile_link_import_strings([
         ('our_test_func.c', code_str),

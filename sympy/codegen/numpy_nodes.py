@@ -1,8 +1,8 @@
 from sympy.core.function import Add, ArgumentIndexError, Function
 from sympy.core.power import Pow
 from sympy.core.singleton import S
+from sympy.core.sorting import default_sort_key
 from sympy.functions.elementary.exponential import exp, log
-from sympy.utilities import default_sort_key
 
 
 def _logaddexp(x1, x2, *, evaluate=True):
@@ -30,7 +30,11 @@ class logaddexp(Function):
     """ Logarithm of the sum of exponentiations of the inputs.
 
     Helper class for use with e.g. numpy.logaddexp
-    See: https://numpy.org/doc/stable/reference/generated/numpy.logaddexp.html
+
+    See Also
+    ========
+
+    https://numpy.org/doc/stable/reference/generated/numpy.logaddexp.html
     """
     nargs = 2
 
@@ -56,7 +60,7 @@ class logaddexp(Function):
         return self.rewrite(log).evalf(*args, **kwargs)
 
     def _eval_simplify(self, *args, **kwargs):
-        a, b = map(lambda x: x.simplify(**kwargs), self.args)
+        a, b = (x.simplify(**kwargs) for x in self.args)
         candidate = _logaddexp(a, b)
         if candidate != _logaddexp(a, b, evaluate=False):
             return candidate
@@ -68,7 +72,11 @@ class logaddexp2(Function):
     """ Logarithm of the sum of exponentiations of the inputs in base-2.
 
     Helper class for use with e.g. numpy.logaddexp2
-    See: https://numpy.org/doc/stable/reference/generated/numpy.logaddexp2.html
+
+    See Also
+    ========
+
+    https://numpy.org/doc/stable/reference/generated/numpy.logaddexp2.html
     """
     nargs = 2
 
@@ -94,7 +102,7 @@ class logaddexp2(Function):
         return self.rewrite(log).evalf(*args, **kwargs)
 
     def _eval_simplify(self, *args, **kwargs):
-        a, b = map(lambda x: x.simplify(**kwargs).factor(), self.args)
+        a, b = (x.simplify(**kwargs).factor() for x in self.args)
         candidate = _logaddexp2(a, b)
         if candidate != _logaddexp2(a, b, evaluate=False):
             return candidate

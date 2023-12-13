@@ -1,9 +1,9 @@
 from sympy.core import Add, Expr, Mul, S, sympify
 from sympy.core.function import _mexpand, count_ops, expand_mul
+from sympy.core.sorting import default_sort_key
 from sympy.core.symbol import Dummy
 from sympy.functions import root, sign, sqrt
 from sympy.polys import Poly, PolynomialError
-from sympy.utilities import default_sort_key
 
 
 def is_sqrt(expr):
@@ -120,13 +120,13 @@ def sqrtdenest(expr, max_iter=3):
     References
     ==========
 
-    .. [1] http://researcher.watson.ibm.com/researcher/files/us-fagin/symb85.pdf
+    .. [1] https://web.archive.org/web/20210806201615/https://researcher.watson.ibm.com/researcher/files/us-fagin/symb85.pdf
 
     .. [2] D. J. Jeffrey and A. D. Rich, 'Symplifying Square Roots of Square Roots
-           by Denesting' (available at http://www.cybertester.com/data/denest.pdf)
+           by Denesting' (available at https://www.cybertester.com/data/denest.pdf)
 
     """
-    expr = expand_mul(sympify(expr))
+    expr = expand_mul(expr)
     for i in range(max_iter):
         z = _sqrtdenest0(expr)
         if expr == z:
@@ -258,6 +258,9 @@ def _sqrtdenest0(expr):
 def _sqrtdenest_rec(expr):
     """Helper that denests the square root of three or more surds.
 
+    Explanation
+    ===========
+
     It returns the denested expression; if it cannot be denested it
     throws SqrtdenestStopIteration
 
@@ -379,7 +382,9 @@ def _sqrt_symbolic_denest(a, b, r):
     """Given an expression, sqrt(a + b*sqrt(b)), return the denested
     expression or None.
 
-    Algorithm:
+    Explanation
+    ===========
+
     If r = ra + rb*sqrt(rr), try replacing sqrt(rr) in ``a`` with
     (y**2 - ra)/rb, and if the result is a quadratic, ca*y**2 + cb*y + cc, and
     (cb + b)**2 - 4*ca*cc is 0, then sqrt(a + b*sqrt(r)) can be rewritten as
@@ -464,7 +469,9 @@ def sqrt_biquadratic_denest(expr, a, b, r, d2):
 
     If it cannot denest it returns None.
 
-    ALGORITHM
+    Explanation
+    ===========
+
     Search for a solution A of type SQRR of the biquadratic equation
     4*A**4 - 4*a*A**2 + b**2*r = 0                               (1)
     sqd = sqrt(a**2 - b**2*r)
@@ -530,6 +537,9 @@ def sqrt_biquadratic_denest(expr, a, b, r, d2):
 
 def _denester(nested, av0, h, max_depth_level):
     """Denests a list of expressions that contain nested square roots.
+
+    Explanation
+    ===========
 
     Algorithm based on <http://www.almaden.ibm.com/cs/people/fagin/symb85.pdf>.
 

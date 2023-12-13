@@ -1,13 +1,16 @@
 from sympy.core.backend import sympify
 from sympy.physics.vector import Point
 
-from sympy.utilities.exceptions import SymPyDeprecationWarning
+from sympy.utilities.exceptions import sympy_deprecation_warning
 
 __all__ = ['Particle']
 
 
 class Particle:
     """A particle.
+
+    Explanation
+    ===========
 
     Particles have a non-zero mass and lack spatial extension; they take up no
     space.
@@ -16,6 +19,7 @@ class Particle:
 
     Parameters
     ==========
+
     name : str
         Name of particle
     point : Point
@@ -75,8 +79,11 @@ class Particle:
     def linear_momentum(self, frame):
         """Linear momentum of the particle.
 
+        Explanation
+        ===========
+
         The linear momentum L, of a particle P, with respect to frame N is
-        given by
+        given by:
 
         L = m * v
 
@@ -111,10 +118,13 @@ class Particle:
     def angular_momentum(self, point, frame):
         """Angular momentum of the particle about the point.
 
+        Explanation
+        ===========
+
         The angular momentum H, about some point O of a particle, P, is given
         by:
 
-        H = r x m * v
+        ``H = cross(r, m * v)``
 
         where r is the position vector from point O to the particle P, m is
         the mass of the particle, and v is the velocity of the particle in
@@ -150,11 +160,14 @@ class Particle:
         return self.point.pos_from(point) ^ (self.mass * self.point.vel(frame))
 
     def kinetic_energy(self, frame):
-        """Kinetic energy of the particle
+        """Kinetic energy of the particle.
 
-        The kinetic energy, T, of a particle, P, is given by
+        Explanation
+        ===========
 
-        'T = 1/2 m v^2'
+        The kinetic energy, T, of a particle, P, is given by:
+
+        ``T = 1/2 (dot(m * v, v))``
 
         where m is the mass of particle P, and v is the velocity of the
         particle in the supplied ReferenceFrame.
@@ -230,12 +243,16 @@ class Particle:
         self._pe = sympify(scalar)
 
     def set_potential_energy(self, scalar):
-        SymPyDeprecationWarning(
-                feature="Method sympy.physics.mechanics." +
-                    "Particle.set_potential_energy(self, scalar)",
-                useinstead="property sympy.physics.mechanics." +
-                    "Particle.potential_energy",
-                deprecated_since_version="1.5", issue=9800).warn()
+        sympy_deprecation_warning(
+            """
+The sympy.physics.mechanics.Particle.set_potential_energy()
+method is deprecated. Instead use
+
+    P.potential_energy = scalar
+            """,
+        deprecated_since_version="1.5",
+        active_deprecations_target="deprecated-set-potential-energy",
+        )
         self.potential_energy = scalar
 
     def parallel_axis(self, point, frame):
@@ -244,6 +261,7 @@ class Particle:
 
         Parameters
         ==========
+
         point : sympy.physics.vector.Point
             The point to express the inertia dyadic about.
         frame : sympy.physics.vector.ReferenceFrame
@@ -251,6 +269,7 @@ class Particle:
 
         Returns
         =======
+
         inertia : sympy.physics.vector.Dyadic
             The inertia dyadic of the particle expressed about the provided
             point and frame.

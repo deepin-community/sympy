@@ -1,4 +1,10 @@
-from sympy import Mul, S, Pow, Symbol, summation, Dict, factorial as fac
+from sympy.concrete.summations import summation
+from sympy.core.containers import Dict
+from sympy.core.mul import Mul
+from sympy.core.power import Pow
+from sympy.core.singleton import S
+from sympy.core.symbol import Symbol
+from sympy.functions.combinatorial.factorials import factorial as fac
 from sympy.core.evalf import bitcount
 from sympy.core.numbers import Integer, Rational
 
@@ -13,7 +19,7 @@ from sympy.ntheory.factor_ import (smoothness, smoothness_p, proper_divisors,
     mersenne_prime_exponent, is_perfect, is_mersenne_prime, is_abundant,
     is_deficient, is_amicable, dra, drm)
 
-from sympy.testing.pytest import raises
+from sympy.testing.pytest import raises, slow
 
 from sympy.utilities.iterables import capture
 
@@ -110,8 +116,8 @@ def test_multiplicity_in_factorial():
 
 
 def test_perfect_power():
-    raises(ValueError, lambda: perfect_power(0))
-    raises(ValueError, lambda: perfect_power(Rational(25, 4)))
+    raises(ValueError, lambda: perfect_power(0.1))
+    assert perfect_power(0) is False
     assert perfect_power(1) is False
     assert perfect_power(2) is False
     assert perfect_power(3) is False
@@ -151,7 +157,14 @@ def test_perfect_power():
         m = perfect_power(t*3**d, big=False)
         assert m and m[1] == 2 or d == 1 or d == 3, (d, m)
 
+    # negatives and non-integer rationals
+    assert perfect_power(-4) is False
+    assert perfect_power(-8) == (-2, 3)
+    assert perfect_power(Rational(1, 2)**3) == (S.Half, 3)
+    assert perfect_power(Rational(-3, 2)**3) == (-3*S.Half, 3)
 
+
+@slow
 def test_factorint():
     assert primefactors(123456) == [2, 3, 643]
     assert factorint(0) == {0: 1}
@@ -446,7 +459,7 @@ def test_issue_4356():
 
 def test_divisors():
     assert divisors(28) == [1, 2, 4, 7, 14, 28]
-    assert [x for x in divisors(3*5*7, 1)] == [1, 3, 5, 15, 7, 21, 35, 105]
+    assert list(divisors(3*5*7, 1)) == [1, 3, 5, 15, 7, 21, 35, 105]
     assert divisors(0) == []
 
 
@@ -458,7 +471,7 @@ def test_divisor_count():
 def test_proper_divisors():
     assert proper_divisors(-1) == []
     assert proper_divisors(28) == [1, 2, 4, 7, 14]
-    assert [x for x in proper_divisors(3*5*7, True)] == [1, 3, 5, 15, 7, 21, 35]
+    assert list(proper_divisors(3*5*7, True)) == [1, 3, 5, 15, 7, 21, 35]
 
 
 def test_proper_divisor_count():
@@ -510,7 +523,7 @@ def test_visual_factorint():
     assert type(forty2) == Mul
     assert str(forty2) == '2**1*3**1*7**1'
     assert factorint(1, visual=True) is S.One
-    no = dict(evaluate=False)
+    no = {"evaluate": False}
     assert factorint(42**2, visual=True) == Mul(Pow(2, 2, **no),
                                                 Pow(3, 2, **no),
                                                 Pow(7, 2, **no), **no)
@@ -522,7 +535,7 @@ def test_factorrat():
     assert str(factorrat(Rational(1, 1), visual=True)) == '1'
     assert str(factorrat(S(25)/14, visual=True)) == '5**2/(2*7)'
     assert str(factorrat(Rational(25, 14), visual=True)) == '5**2/(2*7)'
-    assert str(factorrat(S(-25)/14/9, visual=True)) == '-5**2/(2*3**2*7)'
+    assert str(factorrat(S(-25)/14/9, visual=True)) == '-1*5**2/(2*3**2*7)'
 
     assert factorrat(S(12)/1, multiple=True) == [2, 2, 3]
     assert factorrat(Rational(1, 1), multiple=True) == []
@@ -560,7 +573,7 @@ def test_visual_io():
     assert [fi(th, visual=0) for th in [d, m, n]] == [m, d, d]
 
     # test reevaluation
-    no = dict(evaluate=False)
+    no = {"evaluate": False}
     assert sm({4: 2}, visual=False) == sm(16)
     assert sm(Mul(*[Pow(k, v, **no) for k, v in {4: 2, 2: 6}.items()], **no),
               visual=False) == sm(2**10)
