@@ -1,13 +1,18 @@
-from sympy.core.compatibility import as_int
+from __future__ import annotations
+
 from sympy.core.function import Function
-from sympy.utilities.iterables import cartes
 from sympy.core.numbers import igcd, igcdex, mod_inverse
 from sympy.core.power import isqrt
 from sympy.core.singleton import S
+from sympy.polys import Poly
+from sympy.polys.domains import ZZ
+from sympy.polys.galoistools import gf_crt1, gf_crt2, linear_congruence
 from .primetest import isprime
-from .factor_ import factorint, trailing, totient, multiplicity
-from random import randint, Random
+from .factor_ import factorint, trailing, totient, multiplicity, perfect_power
+from sympy.utilities.misc import as_int
+from sympy.core.random import _randint, randint
 
+from itertools import cycle, product
 
 
 def n_order(a, n):
@@ -15,6 +20,12 @@ def n_order(a, n):
 
     The order of ``a`` modulo ``n`` is the smallest integer
     ``k`` such that ``a**k`` leaves a remainder of 1 with ``n``.
+
+    Parameters
+    ==========
+
+    a : integer
+    n : integer, n > 1. a and n should be relatively prime
 
     Examples
     ========
@@ -27,29 +38,33 @@ def n_order(a, n):
     """
     from collections import defaultdict
     a, n = as_int(a), as_int(n)
+    if n <= 1:
+        raise ValueError("n should be an integer greater than 1")
+    a = a % n
+    # Trivial
+    if a == 1:
+        return 1
     if igcd(a, n) != 1:
         raise ValueError("The two numbers should be relatively prime")
+    # We want to calculate
+    # order = totient(n), factors = factorint(order)
     factors = defaultdict(int)
-    f = factorint(n)
-    for px, kx in f.items():
+    for px, kx in factorint(n).items():
         if kx > 1:
             factors[px] += kx - 1
-        fpx = factorint(px - 1)
-        for py, ky in fpx.items():
+        for py, ky in factorint(px - 1).items():
             factors[py] += ky
-    group_order = 1
-    for px, kx in factors.items():
-        group_order *= px**kx
     order = 1
-    if a > n:
-        a = a % n
+    for px, kx in factors.items():
+        order *= px**kx
+    # Now the `order` is the order of the group.
+    # The order of `a` divides the order of the group.
     for p, e in factors.items():
-        exponent = group_order
-        for f in range(e + 1):
-            if pow(a, exponent, n) != 1:
-                order *= p ** (e - f + 1)
+        for _ in range(e):
+            if pow(a, order // p, n) == 1:
+                order //= p
+            else:
                 break
-            exponent = exponent // p
     return order
 
 
@@ -85,7 +100,7 @@ def _primitive_root_prime_iter(p):
 
 def primitive_root(p):
     """
-    Returns the smallest primitive root or None
+    Returns the smallest primitive root or None.
 
     Parameters
     ==========
@@ -151,12 +166,18 @@ def primitive_root(p):
 
 def is_primitive_root(a, p):
     """
-    Returns True if ``a`` is a primitive root of ``p``
+    Returns True if ``a`` is a primitive root of ``p``.
 
     ``a`` is said to be the primitive root of ``p`` if gcd(a, p) == 1 and
     totient(p) is the smallest positive number s.t.
 
         a**totient(p) cong 1 mod(p)
+
+    Parameters
+    ==========
+
+    a : integer
+    p : integer, p > 1. a and p should be relatively prime
 
     Examples
     ========
@@ -173,11 +194,34 @@ def is_primitive_root(a, p):
 
     """
     a, p = as_int(a), as_int(p)
+    if p <= 1:
+        raise ValueError("p should be an integer greater than 1")
+    a = a % p
     if igcd(a, p) != 1:
         raise ValueError("The two numbers should be relatively prime")
-    if a > p:
-        a = a % p
-    return n_order(a, p) == totient(p)
+    # Primitive root of p exist only for
+    # p = 2, 4, q**e, 2*q**e (q is odd prime)
+    if p <= 4:
+        # The primitive root is only p-1.
+        return a == p - 1
+    t = trailing(p)
+    if t > 1:
+        return False
+    q = p >> t
+    if isprime(q):
+        group_order = q - 1
+        factors = set(factorint(q - 1).keys())
+    else:
+        m = perfect_power(q)
+        if not m:
+            return False
+        q, e = m
+        if not isprime(q):
+            return False
+        group_order = q**(e - 1)*(q - 1)
+        factors = set(factorint(q - 1).keys())
+        factors.add(q)
+    return all(pow(a, group_order // prime, p) != 1 for prime in factors)
 
 
 def _sqrt_mod_tonelli_shanks(a, p):
@@ -214,7 +258,7 @@ def _sqrt_mod_tonelli_shanks(a, p):
 
 def sqrt_mod(a, p, all_roots=False):
     """
-    Find a root of ``x**2 = a mod p``
+    Find a root of ``x**2 = a mod p``.
 
     Parameters
     ==========
@@ -243,7 +287,7 @@ def sqrt_mod(a, p, all_roots=False):
     [7, 9, 23, 25]
     """
     if all_roots:
-        return sorted(list(sqrt_mod_iter(a, p)))
+        return sorted(sqrt_mod_iter(a, p))
     try:
         p = abs(as_int(p))
         it = sqrt_mod_iter(a, p)
@@ -272,13 +316,12 @@ def _product(*iters):
     =====
 
     Unlike itertools.product, it works also with iterables which do not fit
-    in memory. See http://bugs.python.org/issue10109
+    in memory. See https://bugs.python.org/issue10109
 
     Author: Fernando Sumudu
     with small changes
     """
-    import itertools
-    inf_iters = tuple(itertools.cycle(enumerate(it)) for it in iters)
+    inf_iters = tuple(cycle(enumerate(it)) for it in iters)
     num_iters = len(inf_iters)
     cur_val = [None]*num_iters
 
@@ -300,7 +343,7 @@ def _product(*iters):
 
 def sqrt_mod_iter(a, p, domain=int):
     """
-    Iterate over solutions to ``x**2 = a mod p``
+    Iterate over solutions to ``x**2 = a mod p``.
 
     Parameters
     ==========
@@ -316,8 +359,6 @@ def sqrt_mod_iter(a, p, domain=int):
     >>> list(sqrt_mod_iter(11, 43))
     [21, 22]
     """
-    from sympy.polys.galoistools import gf_crt1, gf_crt2
-    from sympy.polys.domains import ZZ
     a, p = as_int(a), abs(as_int(p))
     if isprime(p):
         a = a % p
@@ -382,9 +423,6 @@ def _sqrt_mod_prime_power(a, p, k):
     .. [2] http://www.numbertheory.org/php/squareroot.html
     .. [3] [Gathen99]_
     """
-    from sympy.core.numbers import igcdex
-    from sympy.polys.domains import ZZ
-
     pk = p**k
     a = a % pk
 
@@ -582,7 +620,12 @@ def _sqrt_mod1(a, p, n):
 def is_quad_residue(a, p):
     """
     Returns True if ``a`` (mod ``p``) is in the set of squares mod ``p``,
-    i.e a % p in set([i**2 % p for i in range(p)]). If ``p`` is an odd
+    i.e a % p in set([i**2 % p for i in range(p)]).
+
+    Examples
+    ========
+
+    If ``p`` is an odd
     prime, an iterative method is used to make the determination:
 
     >>> from sympy.ntheory import is_quad_residue
@@ -645,7 +688,7 @@ def is_nthpow_residue(a, n, m):
 
 
 def _is_nthpow_residue_bign(a, n, m):
-    """Returns True if ``x**n == a (mod m)`` has solutions for n > 2."""
+    r"""Returns True if `x^n = a \pmod{n}` has solutions for `n > 2`."""
     # assert n > 2
     # assert a > 0 and m > 0
     if primitive_root(m) is None or igcd(a, m) != 1:
@@ -655,13 +698,13 @@ def _is_nthpow_residue_bign(a, n, m):
                 return False
         return True
     f = totient(m)
-    k = f // igcd(f, n)
-    return pow(a, k, m) == 1
+    k = int(f // igcd(f, n))
+    return pow(a, k, int(m)) == 1
 
 
 def _is_nthpow_residue_bign_prime_power(a, n, p, k):
-    """Returns True/False if a solution for ``x**n == a (mod(p**k))``
-    does/doesn't exist."""
+    r"""Returns True/False if a solution for `x^n = a \pmod{p^k}`
+    does/does not exist."""
     # assert a > 0
     # assert n > 2
     # assert p is prime
@@ -795,7 +838,8 @@ def _help(m, prime_modulo_method, diff_method, expr_val):
     for x, y in dd.items():
         m.append(x)
         a.append(list(y))
-    return sorted({crt(m, list(i))[0] for i in cartes(*a)})
+    return sorted({crt(m, list(i))[0] for i in product(*a)})
+
 
 def _nthroot_mod_composite(a, n, m):
     """
@@ -809,7 +853,7 @@ def _nthroot_mod_composite(a, n, m):
 
 def nthroot_mod(a, n, p, all_roots=False):
     """
-    Find the solutions to ``x**n = a mod p``
+    Find the solutions to ``x**n = a mod p``.
 
     Parameters
     ==========
@@ -830,7 +874,6 @@ def nthroot_mod(a, n, p, all_roots=False):
     >>> nthroot_mod(68, 3, 109)
     23
     """
-    from sympy.core.numbers import igcdex
     a = a % p
     a, n, p = as_int(a), as_int(n), as_int(p)
 
@@ -868,13 +911,13 @@ def nthroot_mod(a, n, p, all_roots=False):
         else:
             res = a
     elif pa == 2:
-        return sqrt_mod(a, p , all_roots)
+        return sqrt_mod(a, p, all_roots)
     else:
         res = _nthroot_mod1(a, pa, p, all_roots)
     return res
 
 
-def quadratic_residues(p):
+def quadratic_residues(p) -> list[int]:
     """
     Returns the list of quadratic residues.
 
@@ -886,10 +929,8 @@ def quadratic_residues(p):
     [0, 1, 2, 4]
     """
     p = as_int(p)
-    r = set()
-    for i in range(p // 2 + 1):
-        r.add(pow(i, 2, p))
-    return sorted(list(r))
+    r = {pow(i, 2, p) for i in range(p // 2 + 1)}
+    return sorted(r)
 
 
 def legendre_symbol(a, p):
@@ -1008,10 +1049,6 @@ def jacobi_symbol(m, n):
         return 0
 
     j = 1
-    if m < 0:
-        m = -m
-        if n % 4 == 3:
-            j = -j
     while m != 0:
         while m % 2 == 0 and m > 0:
             m >>= 1
@@ -1021,8 +1058,6 @@ def jacobi_symbol(m, n):
         if m % 4 == n % 4 == 3:
             j = -j
         m %= n
-    if n != 1:
-        j = 0
     return j
 
 
@@ -1154,7 +1189,7 @@ def _discrete_log_shanks_steps(n, a, b, order=None):
     if order is None:
         order = n_order(b, n)
     m = isqrt(order) + 1
-    T = dict()
+    T = {}
     x = 1
     for i in range(m):
         T[x] = i
@@ -1200,13 +1235,11 @@ def _discrete_log_pollard_rho(n, a, b, order=None, retries=10, rseed=None):
 
     if order is None:
         order = n_order(b, n)
-    prng = Random()
-    if rseed is not None:
-        prng.seed(rseed)
+    randint = _randint(rseed)
 
     for i in range(retries):
-        aa = prng.randint(1, order - 1)
-        ba = prng.randint(1, order - 1)
+        aa = randint(1, order - 1)
+        ba = randint(1, order - 1)
         xa = pow(b, aa, n) * pow(a, ba, n) % n
 
         c = xa % 3
@@ -1347,7 +1380,7 @@ def discrete_log(n, a, b, order=None, prime_order=None):
     References
     ==========
 
-    .. [1] http://mathworld.wolfram.com/DiscreteLogarithm.html
+    .. [1] https://mathworld.wolfram.com/DiscreteLogarithm.html
     .. [2] "Handbook of applied cryptography", Menezes, A. J., Van, O. P. C., &
         Vanstone, S. A. (1997).
 
@@ -1372,13 +1405,17 @@ def discrete_log(n, a, b, order=None, prime_order=None):
 
 def quadratic_congruence(a, b, c, p):
     """
-    Find the solutions to ``a x**2 + b x + c = 0 mod p
-    a : integer
-    b : integer
-    c : integer
-    p : positive integer
+    Find the solutions to ``a x**2 + b x + c = 0 mod p.
+
+    Parameters
+    ==========
+
+    a : int
+    b : int
+    c : int
+    p : int
+        A positive integer.
     """
-    from sympy.polys.galoistools import linear_congruence
     a = as_int(a)
     b = as_int(b)
     c = as_int(c)
@@ -1408,7 +1445,7 @@ def quadratic_congruence(a, b, c, p):
         for i in y:
             res.add((i - b // 2) % p)
         return sorted(res)
-    y = sqrt_mod(b * b - 4 * a * c , 4 * a * p, all_roots=True)
+    y = sqrt_mod(b * b - 4 * a * c, 4 * a * p, all_roots=True)
     res = set()
     for i in y:
         root = linear_congruence(2 * a, i - b, 4 * a * p)
@@ -1490,12 +1527,10 @@ def _valid_expr(expr):
     with integer coefficients else raise a ValueError.
     """
 
-    from sympy import Poly
-    from sympy.polys.domains import ZZ
     if not expr.is_polynomial():
         raise ValueError("The expression should be a polynomial")
     polynomial = Poly(expr)
-    if not  polynomial.is_univariate:
+    if not polynomial.is_univariate:
         raise ValueError("The expression should be univariate")
     if not polynomial.domain == ZZ:
         raise ValueError("The expression should should have integer coefficients")

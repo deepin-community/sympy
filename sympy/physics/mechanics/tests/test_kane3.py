@@ -1,13 +1,18 @@
-from sympy import evalf, symbols, pi, sin, cos, sqrt, acos, Matrix
-from sympy.physics.mechanics import (ReferenceFrame, dynamicsymbols, inertia,
-                                     KanesMethod, RigidBody, Point, dot, msubs)
-from sympy.testing.pytest import slow, ON_TRAVIS, skip, warns_deprecated_sympy
+from sympy.core.evalf import evalf
+from sympy.core.numbers import pi
+from sympy.core.symbol import symbols
+from sympy.functions.elementary.miscellaneous import sqrt
+from sympy.functions.elementary.trigonometric import acos, sin, cos
+from sympy.matrices.dense import Matrix
+from sympy.physics.mechanics import (ReferenceFrame, dynamicsymbols,
+    KanesMethod, inertia, msubs, Point, RigidBody, dot)
+from sympy.testing.pytest import slow, ON_CI, skip
 
 
 @slow
 def test_bicycle():
-    if ON_TRAVIS:
-        skip("Too slow for travis.")
+    if ON_CI:
+        skip("Too slow for CI.")
     # Code to get equations of motion for a bicycle modeled as in:
     # J.P Meijaard, Jim M Papadopoulos, Andy Ruina and A.L Schwab. Linearized
     # dynamics equations for the balance and steer of a bicycle: a benchmark
@@ -171,8 +176,7 @@ def test_bicycle():
             u_ind=[u2, u3, u5],
             u_dependent=[u1, u4, u6], velocity_constraints=conlist_speed,
             kd_eqs=kd)
-    with warns_deprecated_sympy():
-        (fr, frstar) = KM.kanes_equations(FL, BL)
+    (fr, frstar) = KM.kanes_equations(BL, FL)
 
     # This is the start of entering in the numerical values from the benchmark
     # paper to validate the eigen values of the linearized equations from this

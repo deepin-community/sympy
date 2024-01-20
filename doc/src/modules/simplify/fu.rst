@@ -77,7 +77,7 @@ TR11's behavior is similar. It rewrites double angles as smaller angles but
 doesn't do any simplification of the result.
 
     >>> TR11(sin(2)**a*cos(1)**(-a), 1)
-    (2*sin(1)*cos(1))**a*cos(1)**(-a)
+    (2*sin(1)*cos(1))**a/cos(1)**a
     >>> powsimp(_)
     (2*sin(1))**a
 
@@ -243,7 +243,7 @@ References
 .. [1] Fu, Hongguang, Xiuqin Zhong, and Zhenbing Zeng.
     "Automated and readable simplification of trigonometric expressions."
     Mathematical and computer modelling 44.11 (2006): 1169-1177.
-    http://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.657.2478&rep=rep1&type=pdf
+    https://citeseerx.ist.psu.edu/viewdoc/download?doi=10.1.1.657.2478&rep=rep1&type=pdf
 
 .. [2] A formula sheet for trigonometric functions.
     http://www.sosmath.com/trig/Trig5/trig5/pdf/pdf.html

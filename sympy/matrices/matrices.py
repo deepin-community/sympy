@@ -1,36 +1,38 @@
 import mpmath as mp
+from collections.abc import Callable
+
 
 from sympy.core.add import Add
 from sympy.core.basic import Basic
-from sympy.core.compatibility import (
-    Callable, NotIterable, as_int, is_sequence)
-from sympy.core.decorators import deprecated
+from sympy.core.function import diff
 from sympy.core.expr import Expr
+from sympy.core.kind import _NumberKind, UndefinedKind
+from sympy.core.mul import Mul
 from sympy.core.power import Pow
 from sympy.core.singleton import S
 from sympy.core.symbol import Dummy, Symbol, uniquely_named_symbol
-from sympy.core.sympify import sympify
-from sympy.core.sympify import _sympify
-from sympy.functions import exp, factorial, log
+from sympy.core.sympify import sympify, _sympify
+from sympy.functions.combinatorial.factorials import binomial, factorial
+from sympy.functions.elementary.complexes import re
+from sympy.functions.elementary.exponential import exp, log
 from sympy.functions.elementary.miscellaneous import Max, Min, sqrt
-from sympy.functions.special.tensor_functions import KroneckerDelta
+from sympy.functions.special.tensor_functions import KroneckerDelta, LeviCivita
 from sympy.polys import cancel
 from sympy.printing import sstr
 from sympy.printing.defaults import Printable
-from sympy.simplify import simplify as _simplify
-from sympy.utilities.exceptions import SymPyDeprecationWarning
-from sympy.utilities.iterables import flatten
-from sympy.utilities.misc import filldedent
+from sympy.printing.str import StrPrinter
+from sympy.utilities.iterables import flatten, NotIterable, is_sequence, reshape
+from sympy.utilities.misc import as_int, filldedent
 
 from .common import (
     MatrixCommon, MatrixError, NonSquareMatrixError, NonInvertibleMatrixError,
-    ShapeError)
+    ShapeError, MatrixKind, a2idx)
 
-from .utilities import _iszero, _is_zero_after_expand_mul
+from .utilities import _iszero, _is_zero_after_expand_mul, _simplify
 
 from .determinant import (
     _find_reasonable_pivot, _find_reasonable_pivot_naive,
-    _adjugate, _charpoly, _cofactor, _cofactor_matrix,
+    _adjugate, _charpoly, _cofactor, _cofactor_matrix, _per,
     _det, _det_bareiss, _det_berkowitz, _det_LU, _minor, _minor_submatrix)
 
 from .reductions import _is_echelon, _echelon_form, _rank, _rref
@@ -47,9 +49,11 @@ from .eigen import (
 from .decompositions import (
     _rank_decomposition, _cholesky, _LDLdecomposition,
     _LUdecomposition, _LUdecomposition_Simple, _LUdecompositionFF,
-    _QRdecomposition)
+    _singular_value_decomposition, _QRdecomposition, _upper_hessenberg_decomposition)
 
-from .graph import _connected_components, _connected_components_decomposition
+from .graph import (
+    _connected_components, _connected_components_decomposition,
+    _strongly_connected_components, _strongly_connected_components_decomposition)
 
 from .solvers import (
     _diagonal_solve, _lower_triangular_solve, _upper_triangular_solve,
@@ -62,7 +66,7 @@ from .inverse import (
 
 
 class DeferredVector(Symbol, NotIterable):
-    """A vector whose components are deferred (e.g. for use with lambdify)
+    """A vector whose components are deferred (e.g. for use with lambdify).
 
     Examples
     ========
@@ -123,6 +127,9 @@ class MatrixDeterminant(MatrixCommon):
     def det(self, method="bareiss", iszerofunc=None):
         return _det(self, method=method, iszerofunc=iszerofunc)
 
+    def per(self):
+        return _per(self)
+
     def minor(self, i, j, method="berkowitz"):
         return _minor(self, i, j, method=method)
 
@@ -140,6 +147,7 @@ class MatrixDeterminant(MatrixCommon):
     cofactor.__doc__                     = _cofactor.__doc__
     cofactor_matrix.__doc__              = _cofactor_matrix.__doc__
     det.__doc__                          = _det.__doc__
+    per.__doc__                          = _per.__doc__
     minor.__doc__                        = _minor.__doc__
     minor_submatrix.__doc__              = _minor_submatrix.__doc__
 
@@ -186,10 +194,10 @@ class MatrixReductions(MatrixDeterminant):
                 raise ValueError("For a {0} operation 'n->kn' you must provide the "
                                  "kwargs `{0}` and `k`".format(error_str))
             if not 0 <= col < self_cols:
-                raise ValueError("This matrix doesn't have a {} '{}'".format(error_str, col))
+                raise ValueError("This matrix does not have a {} '{}'".format(error_str, col))
 
         elif op == "n<->m":
-            # we need two cols to swap. It doesn't matter
+            # we need two cols to swap. It does not matter
             # how they were specified, so gather them together and
             # remove `None`
             cols = {col, k, col1, col2}.difference([None])
@@ -201,9 +209,9 @@ class MatrixReductions(MatrixDeterminant):
                                  "kwargs `{0}1` and `{0}2`".format(error_str))
             col1, col2 = cols
             if not 0 <= col1 < self_cols:
-                raise ValueError("This matrix doesn't have a {} '{}'".format(error_str, col1))
+                raise ValueError("This matrix does not have a {} '{}'".format(error_str, col1))
             if not 0 <= col2 < self_cols:
-                raise ValueError("This matrix doesn't have a {} '{}'".format(error_str, col2))
+                raise ValueError("This matrix does not have a {} '{}'".format(error_str, col2))
 
         elif op == "n->n+km":
             col = col1 if col is None else col
@@ -215,9 +223,9 @@ class MatrixReductions(MatrixDeterminant):
                 raise ValueError("For a {0} operation 'n->n+km' `{0}` and `{0}2` must "
                                  "be different.".format(error_str))
             if not 0 <= col < self_cols:
-                raise ValueError("This matrix doesn't have a {} '{}'".format(error_str, col))
+                raise ValueError("This matrix does not have a {} '{}'".format(error_str, col))
             if not 0 <= col2 < self_cols:
-                raise ValueError("This matrix doesn't have a {} '{}'".format(error_str, col2))
+                raise ValueError("This matrix does not have a {} '{}'".format(error_str, col2))
 
         else:
             raise ValueError('invalid operation %s' % repr(op))
@@ -275,9 +283,9 @@ class MatrixReductions(MatrixDeterminant):
 
         `op` may be one of
 
-            * "n->kn" (column n goes to k*n)
-            * "n<->m" (swap column n and column m)
-            * "n->n+km" (column n goes to column n + k*column m)
+            * ``"n->kn"`` (column n goes to k*n)
+            * ``"n<->m"`` (swap column n and column m)
+            * ``"n->n+km"`` (column n goes to column n + k*column m)
 
         Parameters
         ==========
@@ -305,9 +313,9 @@ class MatrixReductions(MatrixDeterminant):
 
         `op` may be one of
 
-            * "n->kn" (row n goes to k*n)
-            * "n<->m" (swap row n and row m)
-            * "n->n+km" (row n goes to row n + k*row m)
+            * ``"n->kn"`` (row n goes to k*n)
+            * ``"n<->m"`` (swap row n and row m)
+            * ``"n->n+km"`` (row n goes to row n + k*row m)
 
         Parameters
         ==========
@@ -439,7 +447,7 @@ class MatrixCalculus(MatrixCommon):
         Examples
         ========
 
-        >>> from sympy.matrices import Matrix
+        >>> from sympy import Matrix
         >>> from sympy.abc import x, y
         >>> M = Matrix([[x, y], [1, 0]])
         >>> M.diff(x)
@@ -472,7 +480,7 @@ class MatrixCalculus(MatrixCommon):
         Examples
         ========
 
-        >>> from sympy.matrices import Matrix
+        >>> from sympy import Matrix
         >>> from sympy.abc import x, y
         >>> M = Matrix([[x, y], [1, 0]])
         >>> M.integrate((x, ))
@@ -556,7 +564,7 @@ class MatrixCalculus(MatrixCommon):
         Examples
         ========
 
-        >>> from sympy.matrices import Matrix
+        >>> from sympy import Matrix
         >>> from sympy.abc import x, y
         >>> M = Matrix([[x, y], [1, 0]])
         >>> M.limit(x, 2)
@@ -576,39 +584,6 @@ class MatrixCalculus(MatrixCommon):
 # https://github.com/sympy/sympy/pull/12854
 class MatrixDeprecated(MatrixCommon):
     """A class to house deprecated matrix methods."""
-    def _legacy_array_dot(self, b):
-        """Compatibility function for deprecated behavior of ``matrix.dot(vector)``
-        """
-        from .dense import Matrix
-
-        if not isinstance(b, MatrixBase):
-            if is_sequence(b):
-                if len(b) != self.cols and len(b) != self.rows:
-                    raise ShapeError(
-                        "Dimensions incorrect for dot product: %s, %s" % (
-                            self.shape, len(b)))
-                return self.dot(Matrix(b))
-            else:
-                raise TypeError(
-                    "`b` must be an ordered iterable or Matrix, not %s." %
-                    type(b))
-
-        mat = self
-        if mat.cols == b.rows:
-            if b.cols != 1:
-                mat = mat.T
-                b = b.T
-            prod = flatten((mat * b).tolist())
-            return prod
-        if mat.cols == b.cols:
-            return mat.dot(b.T)
-        elif mat.rows == b.rows:
-            return mat.T.dot(b)
-        else:
-            raise ShapeError("Dimensions incorrect for dot product: %s, %s" % (
-                self.shape, b.shape))
-
-
     def berkowitz_charpoly(self, x=Dummy('lambda'), simplify=_simplify):
         return self.charpoly(x=x)
 
@@ -696,7 +671,7 @@ class MatrixDeprecated(MatrixCommon):
         return _det_bareiss(self)
 
     def det_LU_decomposition(self):
-        """Compute matrix determinant using LU decomposition
+        """Compute matrix determinant using LU decomposition.
 
 
         Note that this method fails if the LU decomposition itself
@@ -738,6 +713,33 @@ class MatrixDeprecated(MatrixCommon):
         return self.permute_rows(perm, direction='forward')
 
 
+@Mul._kind_dispatcher.register(_NumberKind, MatrixKind)
+def num_mat_mul(k1, k2):
+    """
+    Return MatrixKind. The element kind is selected by recursive dispatching.
+    Do not need to dispatch in reversed order because KindDispatcher
+    searches for this automatically.
+    """
+    # Deal with Mul._kind_dispatcher's commutativity
+    # XXX: this function is called with either k1 or k2 as MatrixKind because
+    # the Mul kind dispatcher is commutative. Maybe it shouldn't be. Need to
+    # swap the args here because NumberKind does not have an element_kind
+    # attribute.
+    if not isinstance(k2, MatrixKind):
+        k1, k2 = k2, k1
+    elemk = Mul._kind_dispatcher(k1, k2.element_kind)
+    return MatrixKind(elemk)
+
+
+@Mul._kind_dispatcher.register(MatrixKind, MatrixKind)
+def mat_mat_mul(k1, k2):
+    """
+    Return MatrixKind. The element kind is selected by recursive dispatching.
+    """
+    elemk = Mul._kind_dispatcher(k1.element_kind, k2.element_kind)
+    return MatrixKind(elemk)
+
+
 class MatrixBase(MatrixDeprecated,
                  MatrixCalculus,
                  MatrixEigen,
@@ -753,6 +755,18 @@ class MatrixBase(MatrixDeprecated,
     zero = S.Zero
     one = S.One
 
+    @property
+    def kind(self) -> MatrixKind:
+        elem_kinds = {e.kind for e in self.flat()}
+        if len(elem_kinds) == 1:
+            elemkind, = elem_kinds
+        else:
+            elemkind = UndefinedKind
+        return MatrixKind(elemkind)
+
+    def flat(self):
+        return [self[i, j] for i in range(self.rows) for j in range(self.cols)]
+
     def __array__(self, dtype=object):
         from .dense import matrix2numpy
         return matrix2numpy(self, dtype=dtype)
@@ -766,7 +780,6 @@ class MatrixBase(MatrixDeprecated,
 
     def _matrix_pow_by_jordan_blocks(self, num):
         from sympy.matrices import diag, MutableMatrix
-        from sympy import binomial
 
         def jordan_cell_power(jc, n):
             N = jc.shape[0]
@@ -799,16 +812,15 @@ class MatrixBase(MatrixDeprecated,
                 .multiply(P.inv()))
 
     def __str__(self):
-        if self.rows == 0 or self.cols == 0:
+        if S.Zero in self.shape:
             return 'Matrix(%s, %s, [])' % (self.rows, self.cols)
         return "Matrix(%s)" % str(self.tolist())
 
     def _format_str(self, printer=None):
         if not printer:
-            from sympy.printing.str import StrPrinter
             printer = StrPrinter()
         # Handle zero dimensions:
-        if self.rows == 0 or self.cols == 0:
+        if S.Zero in self.shape:
             return 'Matrix(%s, %s, [])' % (self.rows, self.cols)
         if self.rows == 1:
             return "Matrix([%s])" % self.table(printer, rowsep=',\n')
@@ -833,7 +845,6 @@ class MatrixBase(MatrixDeprecated,
         [4, 2, 2, 2, 5, 5],
         [6, 6, 7, 7, 5, 5]])
       """
-      from sympy.core.compatibility import as_int
       ntop = as_int(ntop)
       # make sure we are working with explicit matrices
       b = [i.as_explicit() if hasattr(i, 'as_explicit') else i
@@ -861,7 +872,7 @@ class MatrixBase(MatrixDeprecated,
     def _handle_ndarray(cls, arg):
         # NumPy array or matrix or some other object that implements
         # __array__. So let's first use this method to get a
-        # numpy.array() and then make a python list out of it.
+        # numpy.array() and then make a Python list out of it.
         arr = arg.__array__()
         if len(arr.shape) == 2:
             rows, cols = arr.shape[0], arr.shape[1]
@@ -920,10 +931,9 @@ class MatrixBase(MatrixDeprecated,
         ========
         irregular - filling a matrix with irregular blocks
         """
-        from sympy.matrices.sparse import SparseMatrix
+        from sympy.matrices import SparseMatrix
         from sympy.matrices.expressions.matexpr import MatrixSymbol
         from sympy.matrices.expressions.blockmatrix import BlockMatrix
-        from sympy.utilities.iterables import reshape
 
         flat_list = None
 
@@ -934,11 +944,11 @@ class MatrixBase(MatrixDeprecated,
 
             # Matrix(Matrix(...))
             elif isinstance(args[0], MatrixBase):
-                return args[0].rows, args[0].cols, args[0]._mat
+                return args[0].rows, args[0].cols, args[0].flat()
 
             # Matrix(MatrixSymbol('X', 2, 2))
             elif isinstance(args[0], Basic) and args[0].is_Matrix:
-                return args[0].rows, args[0].cols, args[0].as_explicit()._mat
+                return args[0].rows, args[0].cols, args[0].as_explicit().flat()
 
             elif isinstance(args[0], mp.matrix):
                 M = args[0]
@@ -959,19 +969,30 @@ class MatrixBase(MatrixDeprecated,
                     isinstance(i, MatrixSymbol))
                 raw = lambda i: is_sequence(i) and not ismat(i)
                 evaluate = kwargs.get('evaluate', True)
-                if evaluate:
-                    def do(x):
-                        # make Block and Symbol explicit
-                        if isinstance(x, (list, tuple)):
-                            return type(x)([do(i) for i in x])
-                        if isinstance(x, BlockMatrix) or \
-                                isinstance(x, MatrixSymbol) and \
-                                all(_.is_Integer for _ in x.shape):
-                            return x.as_explicit()
-                        return x
-                    dat = do(dat)
 
-                if dat == [] or dat == [[]]:
+
+                if evaluate:
+
+                    def make_explicit(x):
+                        """make Block and Symbol explicit"""
+                        if isinstance(x, BlockMatrix):
+                            return x.as_explicit()
+                        elif isinstance(x, MatrixSymbol) and all(_.is_Integer for _ in x.shape):
+                            return x.as_explicit()
+                        else:
+                            return x
+
+                    def make_explicit_row(row):
+                        # Could be list or could be list of lists
+                        if isinstance(row, (list, tuple)):
+                            return [make_explicit(x) for x in row]
+                        else:
+                            return make_explicit(row)
+
+                    if isinstance(dat, (list, tuple)):
+                        dat = [make_explicit_row(row) for row in dat]
+
+                if dat in ([], [[]]):
                     rows = cols = 0
                     flat_list = []
                 elif not any(raw(i) or ismat(i) for i in dat):
@@ -1003,7 +1024,7 @@ class MatrixBase(MatrixDeprecated,
                         elif raw(i):
                             if i:
                                 ncol.add(len(i))
-                                flat_list.extend(i)
+                                flat_list.extend([cls._sympify(ij) for ij in i])
                         else:
                             ncol.add(1)
                             flat_list.append(i)
@@ -1135,7 +1156,7 @@ class MatrixBase(MatrixDeprecated,
         is_slice = isinstance(key, slice)
         i, j = key = self.key2ij(key)
         is_mat = isinstance(value, MatrixBase)
-        if type(i) is slice or type(j) is slice:
+        if isinstance(i, slice) or isinstance(j, slice):
             if is_mat:
                 self.copyin_matrix(key, value)
                 return
@@ -1161,7 +1182,7 @@ class MatrixBase(MatrixDeprecated,
             return
 
     def add(self, b):
-        """Return self + b """
+        """Return self + b."""
         return self + b
 
     def condition_number(self):
@@ -1203,7 +1224,7 @@ class MatrixBase(MatrixDeprecated,
         [3, 4]])
 
         """
-        return self._new(self.rows, self.cols, self._mat)
+        return self._new(self.rows, self.cols, self.flat())
 
     def cross(self, b):
         r"""
@@ -1226,7 +1247,7 @@ class MatrixBase(MatrixDeprecated,
         """
         from sympy.matrices.expressions.matexpr import MatrixExpr
 
-        if not isinstance(b, MatrixBase) and not isinstance(b, MatrixExpr):
+        if not isinstance(b, (MatrixBase, MatrixExpr)):
             raise TypeError(
                 "{} must be a Matrix, not {}.".format(b, type(b)))
 
@@ -1348,16 +1369,13 @@ class MatrixBase(MatrixDeprecated,
                     "`b` must be an ordered iterable or Matrix, not %s." %
                     type(b))
 
+        if (1 not in self.shape) or (1 not in b.shape):
+            raise ShapeError
+        if len(self) != len(b):
+            raise ShapeError(
+                "Dimensions incorrect for dot product: %s, %s" % (self.shape, b.shape))
+
         mat = self
-        if (1 not in mat.shape) or (1 not in b.shape) :
-            SymPyDeprecationWarning(
-                feature="Dot product of non row/column vectors",
-                issue=13815,
-                deprecated_since_version="1.2",
-                useinstead="* to take matrix products").warn()
-            return mat._legacy_array_dot(b)
-        if len(mat) != len(b):
-            raise ShapeError("Dimensions incorrect for dot product: %s, %s" % (self.shape, b.shape))
         n = len(mat)
         if mat.shape != (1, n):
             mat = mat.reshape(1, n)
@@ -1388,7 +1406,9 @@ class MatrixBase(MatrixDeprecated,
         return (mat * b)[0]
 
     def dual(self):
-        """Returns the dual of a matrix, which is:
+        """Returns the dual of a matrix.
+
+        A dual of a matrix is:
 
         ``(1/2)*levicivita(i, j, k, l)*M(k, l)`` summed over indices `k` and `l`
 
@@ -1399,7 +1419,6 @@ class MatrixBase(MatrixDeprecated,
         so that the dual is a covariant second rank tensor.
 
         """
-        from sympy import LeviCivita
         from sympy.matrices import zeros
 
         M, n = self[:, :], self.rows
@@ -1493,7 +1512,6 @@ class MatrixBase(MatrixDeprecated,
             parameter of f
 
         """
-        from sympy import diff
 
         f, x = _sympify(f), _sympify(x)
         if not self.is_square:
@@ -1563,8 +1581,7 @@ class MatrixBase(MatrixDeprecated,
 
 
     def exp(self):
-
-        """Return the exponential of a square matrix
+        """Return the exponential of a square matrix.
 
         Examples
         ========
@@ -1590,7 +1607,6 @@ class MatrixBase(MatrixDeprecated,
 
         blocks = [cell._eval_matrix_exp_jblock() for cell in cells]
         from sympy.matrices import diag
-        from sympy import re
         eJ = diag(*blocks)
         # n = self.rows
         ret = P.multiply(eJ, dotprodsimp=None).multiply(P.inv(), dotprodsimp=None)
@@ -1639,7 +1655,7 @@ class MatrixBase(MatrixDeprecated,
         return self.__class__(banded(size, bands))
 
     def log(self, simplify=cancel):
-        """Return the logarithm of a square matrix
+        """Return the logarithm of a square matrix.
 
         Parameters
         ==========
@@ -1759,8 +1775,6 @@ class MatrixBase(MatrixDeprecated,
 
         key2ij
         """
-        from sympy.matrices.common import a2idx as a2idx_ # Remove this line after deprecation of a2idx from matrices.py
-
         islice, jslice = [isinstance(k, slice) for k in keys]
         if islice:
             if not self.rows:
@@ -1768,7 +1782,7 @@ class MatrixBase(MatrixDeprecated,
             else:
                 rlo, rhi = keys[0].indices(self.rows)[:2]
         else:
-            rlo = a2idx_(keys[0], self.rows)
+            rlo = a2idx(keys[0], self.rows)
             rhi = rlo + 1
         if jslice:
             if not self.cols:
@@ -1776,7 +1790,7 @@ class MatrixBase(MatrixDeprecated,
             else:
                 clo, chi = keys[1].indices(self.cols)[:2]
         else:
-            clo = a2idx_(keys[1], self.cols)
+            clo = a2idx(keys[1], self.cols)
             chi = clo + 1
         return rlo, rhi, clo, chi
 
@@ -1790,17 +1804,15 @@ class MatrixBase(MatrixDeprecated,
 
         key2bounds
         """
-        from sympy.matrices.common import a2idx as a2idx_ # Remove this line after deprecation of a2idx from matrices.py
-
         if is_sequence(key):
             if not len(key) == 2:
                 raise TypeError('key must be a sequence of length 2')
-            return [a2idx_(i, n) if not isinstance(i, slice) else i
+            return [a2idx(i, n) if not isinstance(i, slice) else i
                     for i, n in zip(key, self.shape)]
         elif isinstance(key, slice):
             return key.indices(len(self))[:2]
         else:
-            return divmod(a2idx_(key, len(self)), self.cols)
+            return divmod(a2idx(key, len(self)), self.cols)
 
     def normalized(self, iszerofunc=_iszero):
         """Return the normalized version of ``self``.
@@ -1843,6 +1855,7 @@ class MatrixBase(MatrixDeprecated,
 
     def norm(self, ord=None):
         """Return the Norm of a Matrix or Vector.
+
         In the simplest case this is the geometric size of the vector
         Other norms can be specified by the ord parameter
 
@@ -1894,8 +1907,8 @@ class MatrixBase(MatrixDeprecated,
         """
         # Row or Column Vector Norms
         vals = list(self.values()) or [0]
-        if self.rows == 1 or self.cols == 1:
-            if ord == 2 or ord is None:  # Common case sqrt(<x, x>)
+        if S.One in self.shape:
+            if ord in (2, None):  # Common case sqrt(<x, x>)
                 return sqrt(Add(*(abs(i) ** 2 for i in vals)))
 
             elif ord == 1:  # sum(abs(x))
@@ -1947,7 +1960,7 @@ class MatrixBase(MatrixDeprecated,
         Examples
         ========
 
-        >>> from sympy.matrices import Matrix, eye
+        >>> from sympy import Matrix, eye
         >>> m = Matrix(2, 3, lambda i, j: i*3+j)
         >>> m
         Matrix([
@@ -2016,8 +2029,7 @@ class MatrixBase(MatrixDeprecated,
         Examples
         ========
 
-        >>> from sympy import Matrix
-        >>> from sympy.printing.str import StrPrinter
+        >>> from sympy import Matrix, StrPrinter
         >>> M = Matrix([[1, 2], [-33, 4]])
         >>> printer = StrPrinter()
         >>> M.table(printer)
@@ -2042,7 +2054,7 @@ class MatrixBase(MatrixDeprecated,
         {-33, 4}
         """
         # Handle zero dimensions:
-        if self.rows == 0 or self.cols == 0:
+        if S.Zero in self.shape:
             return '[]'
         # Build table of string representations of the elements
         res = []
@@ -2092,8 +2104,14 @@ class MatrixBase(MatrixDeprecated,
     def LUdecompositionFF(self):
         return _LUdecompositionFF(self)
 
+    def singular_value_decomposition(self):
+        return _singular_value_decomposition(self)
+
     def QRdecomposition(self):
         return _QRdecomposition(self)
+
+    def upper_hessenberg_decomposition(self):
+        return _upper_hessenberg_decomposition(self)
 
     def diagonal_solve(self, rhs):
         return _diagonal_solve(self, rhs)
@@ -2165,13 +2183,23 @@ class MatrixBase(MatrixDeprecated,
     def connected_components_decomposition(self):
         return _connected_components_decomposition(self)
 
+    def strongly_connected_components(self):
+        return _strongly_connected_components(self)
+
+    def strongly_connected_components_decomposition(self, lower=True):
+        return _strongly_connected_components_decomposition(self, lower=lower)
+
+    _sage_ = Basic._sage_
+
     rank_decomposition.__doc__     = _rank_decomposition.__doc__
     cholesky.__doc__               = _cholesky.__doc__
     LDLdecomposition.__doc__       = _LDLdecomposition.__doc__
     LUdecomposition.__doc__        = _LUdecomposition.__doc__
     LUdecomposition_Simple.__doc__ = _LUdecomposition_Simple.__doc__
     LUdecompositionFF.__doc__      = _LUdecompositionFF.__doc__
+    singular_value_decomposition.__doc__ = _singular_value_decomposition.__doc__
     QRdecomposition.__doc__        = _QRdecomposition.__doc__
+    upper_hessenberg_decomposition.__doc__ = _upper_hessenberg_decomposition.__doc__
 
     diagonal_solve.__doc__         = _diagonal_solve.__doc__
     lower_triangular_solve.__doc__ = _lower_triangular_solve.__doc__
@@ -2199,20 +2227,7 @@ class MatrixBase(MatrixDeprecated,
     connected_components.__doc__   = _connected_components.__doc__
     connected_components_decomposition.__doc__ = \
         _connected_components_decomposition.__doc__
-
-
-@deprecated(
-    issue=15109,
-    useinstead="from sympy.matrices.common import classof",
-    deprecated_since_version="1.3")
-def classof(A, B):
-    from sympy.matrices.common import classof as classof_
-    return classof_(A, B)
-
-@deprecated(
-    issue=15109,
-    deprecated_since_version="1.3",
-    useinstead="from sympy.matrices.common import a2idx")
-def a2idx(j, n=None):
-    from sympy.matrices.common import a2idx as a2idx_
-    return a2idx_(j, n)
+    strongly_connected_components.__doc__   = \
+        _strongly_connected_components.__doc__
+    strongly_connected_components_decomposition.__doc__ = \
+        _strongly_connected_components_decomposition.__doc__
