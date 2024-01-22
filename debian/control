@@ -3,17 +3,28 @@ Section: python
 Priority: optional
 Maintainer: Debian Science Maintainers <debian-science-maintainers@lists.alioth.debian.org>
 Uploaders: Georges Khaznadar <georgesk@debian.org>
-Build-Depends: debhelper-compat (= 12),
- dh-python, python3-all (>= 3.1.3-3),
+Build-Depends: debhelper-compat (= 13),
+ dh-python,
+ python3-all,
  python3-distutils,
+ python3-setuptools,
  python3-mpmath,
  python3-matplotlib,
  python3-sphinx,
+ python3-sphinxcontrib.jquery,
  texlive-latex-base, texlive-latex-extra,
  librsvg2-bin, imagemagick, inkscape, graphviz, dvipng,
- faketime
-Standards-Version: 4.5.0
-Homepage: http://sympy.org/
+ faketime,
+ python3-sphinx-reredirects,
+ python3-sphinx-copybutton,
+ python3-myst-parser,
+ python3-linkify-it,
+ python3-uc-micro,
+ furo,
+ sphinx-basic-ng,
+ sphinx-common,
+Standards-Version: 4.6.1
+Homepage: https://sympy.org/
 Vcs-Git: https://salsa.debian.org/science-team/sympy.git
 Vcs-Browser: https://salsa.debian.org/science-team/sympy
 Rules-Requires-Root: no
@@ -55,7 +66,7 @@ Description: Python shell for SymPy
 Package: python3-sympy
 Architecture: all
 Depends: ${python3:Depends}, ${misc:Depends}, python3-mpmath
-Recommends: python3-pil, python3-numpy
+Recommends: python3-pil, python3-numpy, isympy-common
 Enhances: isympy3, ipython3
 Suggests: texlive-fonts-extra, dvipng, python-sympy-doc
 Breaks: octave-symbolic (<< 2.7.0~git.2018.07.13-1~)

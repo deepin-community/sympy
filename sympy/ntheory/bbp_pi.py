@@ -1,7 +1,7 @@
 '''
 This implementation is a heavily modified fixed point implementation of
 BBP_formula for calculating the nth position of pi. The original hosted
-at: http://en.literateprograms.org/Pi_with_the_BBP_formula_(Python)
+at: https://web.archive.org/web/20151116045029/http://en.literateprograms.org/Pi_with_the_BBP_formula_(Python)
 
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -72,7 +72,7 @@ array (perhaps just a matter of preference).
 '''
 
 import math
-from sympy.core.compatibility import as_int
+from sympy.utilities.misc import as_int
 
 
 def _series(j, n, prec=14):
