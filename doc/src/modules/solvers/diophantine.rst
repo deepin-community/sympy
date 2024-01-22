@@ -3,6 +3,11 @@
 Diophantine
 ===========
 
+.. note::
+
+   For a beginner-friendly guide focused on solving Diophantine equations, refer to
+   :ref:`solving-guide-diophantine`.
+
 Diophantine equations
 ---------------------
 
@@ -311,7 +316,7 @@ unit fractions:
 To get a more thorough understanding of the Diophantine module, please
 refer to the following blog.
 
-http://thilinaatsympy.wordpress.com/
+https://thilinaatsympy.wordpress.com/
 
 
 References
@@ -320,11 +325,11 @@ References
 .. [1] Andreescu, Titu. Andrica, Dorin. Cucurezeanu, Ion. An Introduction to
     Diophantine Equations
 .. [2] Diophantine Equation, Wolfram Mathworld, [online]. Available:
-    http://mathworld.wolfram.com/DiophantineEquation.html
+    https://mathworld.wolfram.com/DiophantineEquation.html
 .. [3] Methods to solve Ax^2 + Bxy + Cy^2 + Dx + Ey + F = 0,[online],
-    Available: http://www.alpertron.com.ar/METHODS.HTM
+    Available: https://www.alpertron.com.ar/METHODS.HTM
 .. [4] Solving the equation ax^2+ bxy + cy^2 + dx + ey + f= 0, [online],
-    Available: http://www.jpr2718.org/ax2p.pdf
+    Available: https://web.archive.org/web/20160323033111/https://www.jpr2718.org/ax2p.pdf
 
 User Functions
 --------------
@@ -332,14 +337,10 @@ User Functions
 This functions is imported into the global namespace
 with ``from sympy import *``:
 
-diophantine
-^^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::diophantine
 
 And this function is imported with ``from sympy.solvers.diophantine import *``:
 
-classify_diop
-^^^^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::classify_diop
 
 Internal Functions
@@ -347,138 +348,118 @@ Internal Functions
 
 These functions are intended for internal use in the Diophantine module.
 
-diop_solve
-^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::diop_solve
 
-diop_linear
-^^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::diop_linear
 
-base_solution_linear
-^^^^^^^^^^^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::base_solution_linear
 
-diop_quadratic
-^^^^^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::diop_quadratic
 
-diop_DN
-^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::diop_DN
 
-cornacchia
-^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::cornacchia
 
-diop_bf_DN
-^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::diop_bf_DN
 
-transformation_to_DN
-^^^^^^^^^^^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::transformation_to_DN
 
-transformation_to_normal
-^^^^^^^^^^^^^^^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::transformation_to_normal
 
-find_DN
-^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::find_DN
 
-diop_ternary_quadratic
-^^^^^^^^^^^^^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::diop_ternary_quadratic
 
-square_factor
-^^^^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::square_factor
 
-descent
-^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::descent
 
-diop_general_pythagorean
-^^^^^^^^^^^^^^^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::diop_general_pythagorean
 
-diop_general_sum_of_squares
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::diop_general_sum_of_squares
 
-diop_general_sum_of_even_powers
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::diop_general_sum_of_even_powers
 
-power_representation
-^^^^^^^^^^^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::power_representation
 
-partition
-^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::partition
 
-sum_of_three_squares
-^^^^^^^^^^^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::sum_of_three_squares
 
-sum_of_four_squares
-^^^^^^^^^^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::sum_of_four_squares
 
-sum_of_powers
-^^^^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::sum_of_powers
 
-sum_of_squares
-^^^^^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::sum_of_squares
 
-merge_solution
-^^^^^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::merge_solution
 
-divisible
-^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::divisible
 
-PQa
-^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::PQa
 
-equivalent
-^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::equivalent
 
-parametrize_ternary_quadratic
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::parametrize_ternary_quadratic
 
-diop_ternary_quadratic_normal
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::diop_ternary_quadratic_normal
 
-ldescent
-^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::ldescent
 
-gaussian_reduce
-^^^^^^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::gaussian_reduce
 
-holzer
-^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::holzer
 
-prime_as_sum_of_two_squares
-^^^^^^^^^^^^^^^^^^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::prime_as_sum_of_two_squares
 
-sqf_normal
-^^^^^^^^^^
 .. autofunction:: sympy.solvers.diophantine.diophantine::sqf_normal
 
-reconstruct
-^^^^^^^^^^^
+
 .. autofunction:: sympy.solvers.diophantine.diophantine::reconstruct
+
+Internal Classes
+------------------
+
+These classes are intended for internal use in the Diophantine module.
+
+.. autoclass:: sympy.solvers.diophantine.diophantine.DiophantineSolutionSet
+   :members:
+
+.. autoclass:: sympy.solvers.diophantine.diophantine.DiophantineEquationType
+   :members:
+
+.. autoclass:: sympy.solvers.diophantine.diophantine.Univariate
+   :members:
+
+.. autoclass:: sympy.solvers.diophantine.diophantine.Linear
+   :members:
+
+.. autoclass:: sympy.solvers.diophantine.diophantine.BinaryQuadratic
+   :members:
+
+.. autoclass:: sympy.solvers.diophantine.diophantine.InhomogeneousTernaryQuadratic
+   :members:
+
+.. autoclass:: sympy.solvers.diophantine.diophantine.HomogeneousTernaryQuadraticNormal
+   :members:
+
+.. autoclass:: sympy.solvers.diophantine.diophantine.HomogeneousTernaryQuadratic
+   :members:
+
+.. autoclass:: sympy.solvers.diophantine.diophantine.InhomogeneousGeneralQuadratic
+   :members:
+
+.. autoclass:: sympy.solvers.diophantine.diophantine.HomogeneousGeneralQuadratic
+   :members:
+
+.. autoclass:: sympy.solvers.diophantine.diophantine.GeneralSumOfSquares
+   :members:
+
+.. autoclass:: sympy.solvers.diophantine.diophantine.GeneralPythagorean
+   :members:
+
+.. autoclass:: sympy.solvers.diophantine.diophantine.CubicThue
+   :members:
+
+.. autoclass:: sympy.solvers.diophantine.diophantine.GeneralSumOfEvenPowers
+   :members:

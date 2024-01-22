@@ -1,7 +1,6 @@
 """
 C++ code printer
 """
-from __future__ import (absolute_import, division, print_function)
 
 from itertools import chain
 from sympy.codegen.ast import Type, none
@@ -11,7 +10,7 @@ from .c import C89CodePrinter, C99CodePrinter
 # from the top-level 'import sympy'. Export them here as well.
 from sympy.printing.codeprinter import cxxcode # noqa:F401
 
-# from http://en.cppreference.com/w/cpp/keyword
+# from https://en.cppreference.com/w/cpp/keyword
 reserved = {
     'C++98': [
         'and', 'and_eq', 'asm', 'auto', 'bitand', 'bitor', 'bool', 'break',
@@ -54,7 +53,7 @@ _math_functions = {
     }
 }
 
-# from http://en.cppreference.com/w/cpp/header/cmath
+# from https://en.cppreference.com/w/cpp/header/cmath
 for k in ('Abs', 'exp', 'log', 'log10', 'sqrt', 'sin', 'cos', 'tan',  # 'Pow'
           'asin', 'acos', 'atan', 'atan2', 'sinh', 'cosh', 'tanh', 'floor'):
     _math_functions['C++98'][k] = k.lower()
@@ -69,7 +68,7 @@ def _attach_print_method(cls, sympy_name, func_name):
     if hasattr(cls, meth_name):
         raise ValueError("Edit method (or subclass) instead of overwriting.")
     def _print_method(self, expr):
-        return '{0}{1}({2})'.format(self._ns, func_name, ', '.join(map(self._print, expr.args)))
+        return '{}{}({})'.format(self._ns, func_name, ', '.join(map(self._print, expr.args)))
     _print_method.__doc__ = "Prints code for %s" % k
     setattr(cls, meth_name, _print_method)
 
@@ -79,25 +78,27 @@ def _attach_print_methods(cls, cont):
         _attach_print_method(cls, sympy_name, cxx_name)
 
 
-class _CXXCodePrinterBase(object):
+class _CXXCodePrinterBase:
     printmethod = "_cxxcode"
     language = 'C++'
     _ns = 'std::'  # namespace
 
     def __init__(self, settings=None):
-        super(_CXXCodePrinterBase, self).__init__(settings or {})
+        super().__init__(settings or {})
 
     def _print_Max(self, expr):
-        from sympy import Max
+        from sympy.functions.elementary.miscellaneous import Max
         if len(expr.args) == 1:
             return self._print(expr.args[0])
-        return "%smax(%s, %s)" % (self._ns, expr.args[0], self._print(Max(*expr.args[1:])))
+        return "%smax(%s, %s)" % (self._ns, self._print(expr.args[0]),
+                                  self._print(Max(*expr.args[1:])))
 
     def _print_Min(self, expr):
-        from sympy import Min
+        from sympy.functions.elementary.miscellaneous import Min
         if len(expr.args) == 1:
             return self._print(expr.args[0])
-        return "%smin(%s, %s)" % (self._ns, expr.args[0], self._print(Min(*expr.args[1:])))
+        return "%smin(%s, %s)" % (self._ns, self._print(expr.args[0]),
+                                  self._print(Min(*expr.args[1:])))
 
     def _print_using(self, expr):
         if expr.alias == none:
@@ -136,7 +137,7 @@ class CXX11CodePrinter(_CXXCodePrinterBase, C99CodePrinter):
 
     def _print_using(self, expr):
         if expr.alias == none:
-            return super(CXX11CodePrinter, self)._print_using(expr)
+            return super()._print_using(expr)
         else:
             return 'using %(alias)s = %(type)s' % expr.kwargs(apply=self._print)
 

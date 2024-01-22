@@ -1,16 +1,20 @@
 from sympy.core.backend import diff, zeros, Matrix, eye, sympify
+from sympy.core.sorting import default_sort_key
 from sympy.physics.vector import dynamicsymbols, ReferenceFrame
-from sympy.physics.mechanics.functions import (find_dynamicsymbols, msubs,
-                                               _f_list_parser)
+from sympy.physics.mechanics.method import _Methods
+from sympy.physics.mechanics.functions import (
+    find_dynamicsymbols, msubs, _f_list_parser, _validate_coordinates)
 from sympy.physics.mechanics.linearize import Linearizer
-from sympy.utilities import default_sort_key
 from sympy.utilities.iterables import iterable
 
 __all__ = ['LagrangesMethod']
 
 
-class LagrangesMethod:
+class LagrangesMethod(_Methods):
     """Lagrange's method object.
+
+    Explanation
+    ===========
 
     This object generates the equations of motion in a two step procedure. The
     first step involves the initialization of LagrangesMethod by supplying the
@@ -27,7 +31,7 @@ class LagrangesMethod:
 
     q, u : Matrix
         Matrices of the generalized coordinates and speeds
-    forcelist : iterable
+    loads : iterable
         Iterable of (Point, vector) or (ReferenceFrame, vector) tuples
         describing the forces on the system.
     bodies : iterable
@@ -100,7 +104,7 @@ class LagrangesMethod:
 
     def __init__(self, Lagrangian, qs, forcelist=None, bodies=None, frame=None,
                  hol_coneqs=None, nonhol_coneqs=None):
-        """Supply the following for the initialization of LagrangesMethod
+        """Supply the following for the initialization of LagrangesMethod.
 
         Lagrangian : Sympifyable
 
@@ -158,6 +162,7 @@ class LagrangesMethod:
         self._q = Matrix(qs)
         self._qdots = self.q.diff(dynamicsymbols._t)
         self._qdoubledots = self._qdots.diff(dynamicsymbols._t)
+        _validate_coordinates(self.q)
 
         mat_build = lambda x: Matrix(x) if x else Matrix()
         hol_coneqs = mat_build(hol_coneqs)
@@ -222,10 +227,16 @@ class LagrangesMethod:
         self.eom = without_lam - self._term3
         return self.eom
 
+    def _form_eoms(self):
+        return self.form_lagranges_equations()
+
     @property
     def mass_matrix(self):
         """Returns the mass matrix, which is augmented by the Lagrange
         multipliers, if necessary.
+
+        Explanation
+        ===========
 
         If the system is described by 'n' generalized coordinates and there are
         no constraint equations then an n X n matrix is returned.
@@ -286,6 +297,7 @@ class LagrangesMethod:
 
         Parameters
         ==========
+
         q_ind, qd_ind : array_like, optional
             The independent generalized coordinates and speeds.
         q_dep, qd_dep : array_like, optional
@@ -346,6 +358,9 @@ class LagrangesMethod:
             **kwargs):
         """Linearize the equations of motion about a symbolic operating point.
 
+        Explanation
+        ===========
+
         If kwarg A_and_B is False (default), returns M, A, B, r for the
         linearized form, M*[q', u']^T = A*[q_ind, u_ind]^T + B*r.
 
@@ -374,10 +389,11 @@ class LagrangesMethod:
 
     def solve_multipliers(self, op_point=None, sol_type='dict'):
         """Solves for the values of the lagrange multipliers symbolically at
-        the specified operating point
+        the specified operating point.
 
         Parameters
         ==========
+
         op_point : dict or iterable of dicts, optional
             Point at which to solve at. The operating point is specified as
             a dictionary or iterable of dictionaries of {symbol: value}. The
@@ -422,7 +438,7 @@ class LagrangesMethod:
             raise ValueError("Unknown sol_type {:}.".format(sol_type))
 
     def rhs(self, inv_method=None, **kwargs):
-        """Returns equations that can be solved numerically
+        """Returns equations that can be solved numerically.
 
         Parameters
         ==========
@@ -454,4 +470,8 @@ class LagrangesMethod:
 
     @property
     def forcelist(self):
+        return self._forcelist
+
+    @property
+    def loads(self):
         return self._forcelist
