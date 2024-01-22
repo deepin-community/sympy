@@ -1,18 +1,17 @@
 """Definitions of monomial orderings. """
 
-
-from typing import Optional
+from __future__ import annotations
 
 __all__ = ["lex", "grlex", "grevlex", "ilex", "igrlex", "igrevlex"]
 
 from sympy.core import Symbol
-from sympy.core.compatibility import iterable
+from sympy.utilities.iterables import iterable
 
 class MonomialOrder:
     """Base class for monomial orderings. """
 
-    alias = None  # type: Optional[str]
-    is_global = None  # type: Optional[bool]
+    alias: str | None = None
+    is_global: bool | None = None
     is_default = False
 
     def __repr__(self):

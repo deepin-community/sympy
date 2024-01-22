@@ -1,10 +1,11 @@
-from sympy import pi, I
-from sympy.core import Dummy, sympify
+from sympy.core.expr import Expr
 from sympy.core.function import Function, ArgumentIndexError
+from sympy.core.numbers import I, pi
 from sympy.core.singleton import S
+from sympy.core.symbol import Dummy
 from sympy.functions import assoc_legendre
 from sympy.functions.combinatorial.factorials import factorial
-from sympy.functions.elementary.complexes import Abs
+from sympy.functions.elementary.complexes import Abs, conjugate
 from sympy.functions.elementary.exponential import exp
 from sympy.functions.elementary.miscellaneous import sqrt
 from sympy.functions.elementary.trigonometric import sin, cos, cot
@@ -127,16 +128,14 @@ class Ynm(Function):
     ==========
 
     .. [1] https://en.wikipedia.org/wiki/Spherical_harmonics
-    .. [2] http://mathworld.wolfram.com/SphericalHarmonic.html
-    .. [3] http://functions.wolfram.com/Polynomials/SphericalHarmonicY/
-    .. [4] http://dlmf.nist.gov/14.30
+    .. [2] https://mathworld.wolfram.com/SphericalHarmonic.html
+    .. [3] https://functions.wolfram.com/Polynomials/SphericalHarmonicY/
+    .. [4] https://dlmf.nist.gov/14.30
 
     """
 
     @classmethod
     def eval(cls, n, m, theta, phi):
-        n, m, theta, phi = [sympify(x) for x in (n, m, theta, phi)]
-
         # Handle negative index m and arguments theta, phi
         if m.could_extract_minus_sign():
             m = -m
@@ -213,7 +212,6 @@ class Ynm(Function):
         #       mpmath for Legendre polynomials. But using
         #       the dedicated function directly is cleaner.
         from mpmath import mp, workprec
-        from sympy import Expr
         n = self.args[0]._to_mpmath(prec)
         m = self.args[1]._to_mpmath(prec)
         theta = self.args[2]._to_mpmath(prec)
@@ -221,13 +219,6 @@ class Ynm(Function):
         with workprec(prec):
             res = mp.spherharm(n, m, theta, phi)
         return Expr._from_mpmath(res, prec)
-
-    def _sage_(self):
-        import sage.all as sage
-        return sage.spherical_harmonic(self.args[0]._sage_(),
-                                       self.args[1]._sage_(),
-                                       self.args[2]._sage_(),
-                                       self.args[3]._sage_())
 
 
 def Ynm_c(n, m, theta, phi):
@@ -266,11 +257,10 @@ def Ynm_c(n, m, theta, phi):
     ==========
 
     .. [1] https://en.wikipedia.org/wiki/Spherical_harmonics
-    .. [2] http://mathworld.wolfram.com/SphericalHarmonic.html
-    .. [3] http://functions.wolfram.com/Polynomials/SphericalHarmonicY/
+    .. [2] https://mathworld.wolfram.com/SphericalHarmonic.html
+    .. [3] https://functions.wolfram.com/Polynomials/SphericalHarmonicY/
 
     """
-    from sympy import conjugate
     return conjugate(Ynm(n, m, theta, phi))
 
 
@@ -327,20 +317,18 @@ class Znm(Function):
     ==========
 
     .. [1] https://en.wikipedia.org/wiki/Spherical_harmonics
-    .. [2] http://mathworld.wolfram.com/SphericalHarmonic.html
-    .. [3] http://functions.wolfram.com/Polynomials/SphericalHarmonicY/
+    .. [2] https://mathworld.wolfram.com/SphericalHarmonic.html
+    .. [3] https://functions.wolfram.com/Polynomials/SphericalHarmonicY/
 
     """
 
     @classmethod
     def eval(cls, n, m, theta, phi):
-        n, m, th, ph = [sympify(x) for x in (n, m, theta, phi)]
-
         if m.is_positive:
-            zz = (Ynm(n, m, th, ph) + Ynm_c(n, m, th, ph)) / sqrt(2)
+            zz = (Ynm(n, m, theta, phi) + Ynm_c(n, m, theta, phi)) / sqrt(2)
             return zz
         elif m.is_zero:
-            return Ynm(n, m, th, ph)
+            return Ynm(n, m, theta, phi)
         elif m.is_negative:
-            zz = (Ynm(n, m, th, ph) - Ynm_c(n, m, th, ph)) / (sqrt(2)*I)
+            zz = (Ynm(n, m, theta, phi) - Ynm_c(n, m, theta, phi)) / (sqrt(2)*I)
             return zz

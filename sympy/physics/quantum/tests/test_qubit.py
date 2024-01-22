@@ -1,6 +1,10 @@
 import random
 
-from sympy import Integer, Matrix, Rational, sqrt, symbols, S
+from sympy.core.numbers import (Integer, Rational)
+from sympy.core.singleton import S
+from sympy.core.symbol import symbols
+from sympy.functions.elementary.miscellaneous import sqrt
+from sympy.matrices.dense import Matrix
 from sympy.physics.quantum.qubit import (measure_all, measure_partial,
                                          matrix_to_qubit, matrix_to_density,
                                          qubit_to_matrix, IntQubit,
@@ -12,7 +16,7 @@ from sympy.physics.quantum.represent import represent
 from sympy.physics.quantum.shor import Qubit
 from sympy.testing.pytest import raises
 from sympy.physics.quantum.density import Density
-from sympy.core.trace import Tr
+from sympy.physics.quantum.trace import Tr
 
 x, y = symbols('x,y')
 
@@ -195,7 +199,7 @@ def test_eval_trace():
     d = Density([q1, 0.6], [q2, 0.4])
 
     t = Tr(d)
-    assert t.doit() == 1
+    assert t.doit() == 1.0
 
     # extreme bits
     t = Tr(d, 0)
@@ -210,7 +214,7 @@ def test_eval_trace():
                         0.6*Density([Qubit('1010'), 1]))
     #trace all indices
     t = Tr(d, [0, 1, 2, 3, 4])
-    assert t.doit() == 1
+    assert t.doit() == 1.0
 
     # trace some indices, initialized in
     # non-canonical order
