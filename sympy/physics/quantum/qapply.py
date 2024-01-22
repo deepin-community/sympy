@@ -4,9 +4,11 @@ Todo:
 * Sometimes the final result needs to be expanded, we should do this by hand.
 """
 
-from __future__ import print_function, division
-
-from sympy import Add, Mul, Pow, sympify, S
+from sympy.core.add import Add
+from sympy.core.mul import Mul
+from sympy.core.power import Pow
+from sympy.core.singleton import S
+from sympy.core.sympify import sympify
 
 from sympy.physics.quantum.anticommutator import AntiCommutator
 from sympy.physics.quantum.commutator import Commutator
@@ -141,8 +143,8 @@ def qapply_Mul(e, **options):
     lhs = args.pop()
 
     # Make sure we have two non-commutative objects before proceeding.
-    if (sympify(rhs).is_commutative and not isinstance(rhs, Wavefunction)) or \
-            (sympify(lhs).is_commutative and not isinstance(lhs, Wavefunction)):
+    if (not isinstance(rhs, Wavefunction) and sympify(rhs).is_commutative) or \
+            (not isinstance(lhs, Wavefunction) and sympify(lhs).is_commutative):
         return e
 
     # For a Pow with an integer exponent, apply one of them and reduce the
@@ -169,8 +171,8 @@ def qapply_Mul(e, **options):
             return qapply(e.func(*args)*comm*rhs, **options)
 
     # Apply tensor products of operators to states
-    if isinstance(lhs, TensorProduct) and all([isinstance(arg, (Operator, State, Mul, Pow)) or arg == 1 for arg in lhs.args]) and \
-            isinstance(rhs, TensorProduct) and all([isinstance(arg, (Operator, State, Mul, Pow)) or arg == 1 for arg in rhs.args]) and \
+    if isinstance(lhs, TensorProduct) and all(isinstance(arg, (Operator, State, Mul, Pow)) or arg == 1 for arg in lhs.args) and \
+            isinstance(rhs, TensorProduct) and all(isinstance(arg, (Operator, State, Mul, Pow)) or arg == 1 for arg in rhs.args) and \
             len(lhs.args) == len(rhs.args):
         result = TensorProduct(*[qapply(lhs.args[n]*rhs.args[n], **options) for n in range(len(lhs.args))]).expand(tensorproduct=True)
         return qapply_Mul(e.func(*args), **options)*result
@@ -180,7 +182,7 @@ def qapply_Mul(e, **options):
         result = lhs._apply_operator(rhs, **options)
     except (NotImplementedError, AttributeError):
         try:
-            result = rhs._apply_operator(lhs, **options)
+            result = rhs._apply_from_right_to(lhs, **options)
         except (NotImplementedError, AttributeError):
             if isinstance(lhs, BraBase) and isinstance(rhs, KetBase):
                 result = InnerProduct(lhs, rhs)

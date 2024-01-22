@@ -1,0 +1,13 @@
+Index: sympy/doc/ext/sphinx_math_dollar/extension.py
+===================================================================
+--- sympy.orig/doc/ext/sphinx_math_dollar/extension.py
++++ sympy/doc/ext/sphinx_math_dollar/extension.py
+@@ -23,7 +23,7 @@ class MathDollarReplacer(GenericNodeVisi
+                     print("sphinx-math-dollar: Skipping", node, "(node_blacklist = %s)" % (node_blacklist,), file=sys.stderr)
+                 return
+             parent = parent.parent
+-        data = split_dollars(node.rawsource)
++        data = split_dollars(node.astext())
+         nodes = []
+         has_math = False
+         for typ, text in data:
