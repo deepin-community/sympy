@@ -1,4 +1,5 @@
-version=3
+version=4
 
-https://github.com/sympy/sympy/tags \
-   /sympy/sympy/archive/sympy-([.0-9]+)\.tar\.gz
+opts="filenamemangle=s%(?:.*?)?v?(\d[\d.]*)\.tar\.gz%sympy-$1.tar.gz%" \
+    https://github.com/sympy/sympy/tags \
+    .*sympy-(\d[\d.]*)\.tar\.gz debian uupdate

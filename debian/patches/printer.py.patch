@@ -4,7 +4,7 @@ Index: sympy/sympy/printing/printer.py
 ===================================================================
 --- sympy.orig/sympy/printing/printer.py
 +++ sympy/sympy/printing/printer.py
-@@ -356,6 +356,14 @@ class _PrintFunction:
+@@ -358,6 +358,14 @@ class _PrintFunction:
          params = list(inspect.signature(f).parameters.values())
          assert params.pop(-1).kind == inspect.Parameter.VAR_KEYWORD
          self.__other_params = params

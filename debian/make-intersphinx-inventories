@@ -1,0 +1,21 @@
+#! /bin/sh
+
+echo -n "Refreshing the file debian intersphinx-inventories.tgz... "
+
+rm -rf doc/src/inv
+mkdir doc/src/inv
+for d in matplotlib  mpmath  numpy  scipy; do
+    mkdir doc/src/inv/$d
+done
+
+(cd doc/src/inv/matplotlib; wget https://matplotlib.org/stable/objects.inv)
+(cd doc/src/inv/mpmath; wget https://mpmath.org/doc/current/objects.inv)
+(cd doc/src/inv/scipy; wget https://docs.scipy.org/doc/scipy/objects.inv)
+(cd doc/src/inv/numpy; wget https://numpy.org/doc/stable/objects.inv)
+
+tar czf debian/intersphinx-inventories.tgz doc/src/inv
+rm -rf doc/src/inv
+
+echo "done"
+
+	 

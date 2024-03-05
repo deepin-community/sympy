@@ -18,7 +18,7 @@ def rescale(y, W, H, mi, ma):
     """Rescale the given array `y` to fit into the integer values
     between `0` and `H-1` for the values between ``mi`` and ``ma``.
     """
-    y_new = list()
+    y_new = []
 
     norm = ma - mi
     offset = (ma + mi) / 2
@@ -29,8 +29,6 @@ def rescale(y, W, H, mi, ma):
             if not is_valid(normalized):
                 y_new.append(None)
             else:
-                # XXX There are some test failings because of the
-                # difference between the python 2 and 3 rounding.
                 rescaled = Float((normalized*H + H/2) * (H-1)/H).round()
                 rescaled = int(rescaled)
                 y_new.append(rescaled)
@@ -57,7 +55,7 @@ def textplot_str(expr, a, b, W=55, H=21):
 
     # Calculate function values
     x = linspace(a, b, W)
-    y = list()
+    y = []
     for val in x:
         try:
             y.append(f(val))

@@ -5,14 +5,12 @@ Goals:
 
 * it should be compatible with py.test and operate very similarly
   (or identically)
-* doesn't require any external dependencies
+* does not require any external dependencies
 * preferably all the functionality should be in this file only
 * no magic, just import the test file and execute the test functions, that's it
 * portable
 
 """
-
-from __future__ import print_function, division
 
 import os
 import sys
@@ -35,15 +33,16 @@ import stat
 import tempfile
 import warnings
 from contextlib import contextmanager
+from inspect import unwrap
 
 from sympy.core.cache import clear_cache
-from sympy.core.compatibility import (exec_, PY3, unwrap)
 from sympy.external import import_module
+from sympy.external.gmpy import GROUND_TYPES, HAS_GMPY
 
 IS_WINDOWS = (os.name == 'nt')
-ON_TRAVIS = os.getenv('TRAVIS_BUILD_NUMBER', None)
+ON_CI = os.getenv('CI', None)
 
-# emperically generated list of the proportion of time spent running
+# empirically generated list of the proportion of time spent running
 # an even split of tests.  This should periodically be regenerated.
 # A list of [.6, .1, .3] would mean that if the tests are evenly split
 # into '1/3', '2/3', '3/3', the first split would take 60% of the time,
@@ -54,7 +53,7 @@ ON_TRAVIS = os.getenv('TRAVIS_BUILD_NUMBER', None)
 #     from time import time
 #     import sympy
 #     import os
-#     os.environ["TRAVIS_BUILD_NUMBER"] = '2' # Mock travis to get more correct densities
+#     os.environ["CI"] = 'true' # Mock CI to get more correct densities
 #     delays, num_splits = [], 30
 #     for i in range(1, num_splits + 1):
 #         tic = time()
@@ -95,10 +94,6 @@ class DependencyError(Exception):
     pass
 
 
-# add more flags ??
-future_flags = division.compiler_flag
-
-
 def _indent(s, indent=4):
     """
     Add the given number of space characters to the beginning of
@@ -124,7 +119,7 @@ def _report_failure(self, out, test, example, got):
     out(self._failure_header(test, example) + s)
 
 
-if PY3 and IS_WINDOWS:
+if IS_WINDOWS:
     DocTestRunner.report_failure = _report_failure  # type: ignore
 
 
@@ -149,7 +144,7 @@ def convert_to_native_paths(lst):
 
 def get_sympy_dir():
     """
-    Returns the root sympy directory and set the global value
+    Returns the root SymPy directory and set the global value
     indicating whether the system is case sensitive or not.
     """
     this_file = os.path.abspath(__file__)
@@ -159,7 +154,8 @@ def get_sympy_dir():
 
 
 def setup_pprint():
-    from sympy import pprint_use_unicode, init_printing
+    from sympy.interactive.printing import init_printing
+    from sympy.printing.pretty.pretty import pprint_use_unicode
     import sympy.interactive.printing as interactive_printing
 
     # force pprint to be in ascii mode in doctests
@@ -243,7 +239,7 @@ def run_in_subprocess_with_hash_randomization(
     # sometimes return None.
 
     # First check if the Python version supports hash randomization
-    # If it doesn't have this support, it won't recognize the -R flag
+    # If it does not have this support, it won't recognize the -R flag
     p = subprocess.Popen([command, "-RV"], stdout=subprocess.PIPE,
                          stderr=subprocess.STDOUT, cwd=cwd)
     p.communicate()
@@ -286,8 +282,7 @@ def run_all_tests(test_args=(), test_kwargs=None,
     Run all tests.
 
     Right now, this runs the regular tests (bin/test), the doctests
-    (bin/doctest), the examples (examples/all.py), and the sage tests (see
-    sympy/external/tests/test_sage.py).
+    (bin/doctest), and the examples (examples/all.py).
 
     This is what ``setup.py test`` uses.
 
@@ -302,7 +297,6 @@ def run_all_tests(test_args=(), test_kwargs=None,
     ... test_kwargs={"colors:False"}) # doctest: +SKIP
 
     """
-    cwd = get_sympy_dir()
     tests_successful = True
 
     test_kwargs = test_kwargs or {}
@@ -327,20 +321,6 @@ def run_all_tests(test_args=(), test_kwargs=None,
         from all import run_examples  # type: ignore
         if not run_examples(*examples_args, **examples_kwargs):
             tests_successful = False
-
-        # Sage tests
-        if sys.platform != "win32" and not PY3 and os.path.exists("bin/test"):
-            # run Sage tests; Sage currently doesn't support Windows or Python 3
-            # Only run Sage tests if 'bin/test' is present (it is missing from
-            # our release because everything in the 'bin' directory gets
-            # installed).
-            dev_null = open(os.devnull, 'w')
-            if subprocess.call("sage -v", shell=True, stdout=dev_null,
-                               stderr=dev_null) == 0:
-                if subprocess.call("sage -python bin/test "
-                                   "sympy/external/tests/test_sage.py",
-                    shell=True, cwd=cwd) != 0:
-                    tests_successful = False
 
         if tests_successful:
             return
@@ -425,7 +405,7 @@ def test(*paths, subprocess=True, rerun=0, **kwargs):
 
     >>> sympy.test(verbose=True)    # doctest: +SKIP
 
-    Don't sort the test output:
+    Do not sort the test output:
 
     >>> sympy.test(sort=False)    # doctest: +SKIP
 
@@ -455,7 +435,7 @@ def test(*paths, subprocess=True, rerun=0, **kwargs):
     >>> sympy.test(split='1/2')  # doctest: +SKIP
 
     The ``time_balance`` option can be passed in conjunction with ``split``.
-    If ``time_balance=True`` (the default for ``sympy.test``), sympy will attempt
+    If ``time_balance=True`` (the default for ``sympy.test``), SymPy will attempt
     to split the tests such that each split takes equal time.  This heuristic
     for balancing is based on pre-recorded test data.
 
@@ -524,7 +504,7 @@ def _test(*paths,
         verbose=False, tb="short", kw=None, pdb=False, colors=True,
         force_colors=False, sort=True, seed=None, timeout=False,
         fail_on_timeout=False, slow=False, enhance_asserts=False, split=None,
-        time_balance=True, blacklist=('sympy/integrals/rubi/rubi_tests/tests',),
+        time_balance=True, blacklist=(),
         fast_threshold=None, slow_threshold=None):
     """
     Internal function that actually runs the tests.
@@ -542,12 +522,10 @@ def _test(*paths,
     post_mortem = pdb
     if seed is None:
         seed = random.randrange(100000000)
-    if ON_TRAVIS and timeout is False:
-        # Travis times out if no activity is seen for 10 minutes.
+    if ON_CI and timeout is False:
         timeout = 595
         fail_on_timeout = True
-    if ON_TRAVIS:
-        # pyglet does not work on Travis
+    if ON_CI:
         blacklist = list(blacklist) + ['sympy/plotting/pygletplot/tests']
     blacklist = convert_to_native_paths(blacklist)
     r = PyTestReporter(verbose=verbose, tb=tb, colors=colors,
@@ -591,7 +569,7 @@ def _test(*paths,
 
 def doctest(*paths, subprocess=True, rerun=0, **kwargs):
     r"""
-    Runs doctests in all \*.py files in the sympy directory which match
+    Runs doctests in all \*.py files in the SymPy directory which match
     any of the given strings in ``paths`` or all tests if paths=[].
 
     Notes:
@@ -634,8 +612,9 @@ def doctest(*paths, subprocess=True, rerun=0, **kwargs):
     >>> sympy.doctest(split='1/2')  # doctest: +SKIP
 
     The ``subprocess`` and ``verbose`` options are the same as with the function
-    ``test()``.  See the docstring of that function for more information.
-
+    ``test()`` (see the docstring of that function for more information) except
+    that ``verbose`` may also be set equal to ``2`` in order to print
+    individual doctest lines, as they are being tested.
     """
     # count up from 0, do not print 0
     print_counter = lambda i : (print("rerun %d" % (rerun-i))
@@ -669,23 +648,22 @@ def _get_doctest_blacklist():
     blacklist.extend([
         "doc/src/modules/plotting.rst",  # generates live plots
         "doc/src/modules/physics/mechanics/autolev_parser.rst",
+        "sympy/codegen/array_utils.py", # raises deprecation warning
+        "sympy/core/compatibility.py", # backwards compatibility shim, importing it triggers a deprecation warning
+        "sympy/core/trace.py", # backwards compatibility shim, importing it triggers a deprecation warning
         "sympy/galgebra.py", # no longer part of SymPy
-        "sympy/this.py", # prints text
-        "sympy/physics/gaussopt.py", # raises deprecation warning
-        "sympy/matrices/densearith.py", # raises deprecation warning
-        "sympy/matrices/densesolve.py", # raises deprecation warning
-        "sympy/matrices/densetools.py", # raises deprecation warning
-        "sympy/printing/ccode.py", # backwards compatibility shim, importing it breaks the codegen doctests
-        "sympy/printing/fcode.py", # backwards compatibility shim, importing it breaks the codegen doctests
-        "sympy/printing/cxxcode.py", # backwards compatibility shim, importing it breaks the codegen doctests
         "sympy/parsing/autolev/_antlr/autolevlexer.py", # generated code
-        "sympy/parsing/autolev/_antlr/autolevparser.py", # generated code
         "sympy/parsing/autolev/_antlr/autolevlistener.py", # generated code
+        "sympy/parsing/autolev/_antlr/autolevparser.py", # generated code
         "sympy/parsing/latex/_antlr/latexlexer.py", # generated code
         "sympy/parsing/latex/_antlr/latexparser.py", # generated code
-        "sympy/integrals/rubi/rubi.py",
         "sympy/plotting/pygletplot/__init__.py", # crashes on some systems
         "sympy/plotting/pygletplot/plot.py", # crashes on some systems
+        "sympy/printing/ccode.py", # backwards compatibility shim, importing it breaks the codegen doctests
+        "sympy/printing/cxxcode.py", # backwards compatibility shim, importing it breaks the codegen doctests
+        "sympy/printing/fcode.py", # backwards compatibility shim, importing it breaks the codegen doctests
+        "sympy/testing/randtest.py", # backwards compatibility shim, importing it triggers a deprecation warning
+        "sympy/this.py", # prints text
     ])
     # autolev parser tests
     num = 12
@@ -714,16 +692,26 @@ def _get_doctest_blacklist():
                 "examples/intermediate/mplot3d.py"
             ])
         else:
-            # Use a non-windowed backend, so that the tests work on Travis
+            # Use a non-windowed backend, so that the tests work on CI
             import matplotlib
             matplotlib.use('Agg')
 
-    if ON_TRAVIS or import_module('pyglet') is None:
+    if ON_CI or import_module('pyglet') is None:
         blacklist.extend(["sympy/plotting/pygletplot"])
 
-    if import_module('theano') is None:
+    if import_module('aesara') is None:
         blacklist.extend([
-            "sympy/printing/theanocode.py",
+            "sympy/printing/aesaracode.py",
+            "doc/src/modules/numeric-computation.rst",
+        ])
+
+    if import_module('cupy') is None:
+        blacklist.extend([
+            "doc/src/modules/numeric-computation.rst",
+        ])
+
+    if import_module('jax') is None:
+        blacklist.extend([
             "doc/src/modules/numeric-computation.rst",
         ])
 
@@ -739,6 +727,20 @@ def _get_doctest_blacklist():
             "sympy/parsing/sym_expr.py",
         ])
 
+    if import_module("scipy") is None:
+        # throws ModuleNotFoundError when scipy not installed
+        blacklist.extend([
+            "doc/src/guides/solving/solve-numerically.md",
+            "doc/src/guides/solving/solve-ode.md",
+        ])
+
+    if import_module("numpy") is None:
+        # throws ModuleNotFoundError when numpy not installed
+        blacklist.extend([
+                "doc/src/guides/solving/solve-ode.md",
+                "doc/src/guides/solving/solve-numerically.md",
+        ])
+
     # disabled because of doctest failures in asmeurer's bot
     blacklist.extend([
         "sympy/utilities/autowrap.py",
@@ -746,15 +748,12 @@ def _get_doctest_blacklist():
         "examples/advanced/autowrap_ufuncify.py"
         ])
 
-    # blacklist these modules until issue 4840 is resolved
     blacklist.extend([
-        "sympy/conftest.py", # Python 2.7 issues
-        "sympy/testing/benchmarking.py",
+        "sympy/conftest.py", # Depends on pytest
     ])
 
     # These are deprecated stubs to be removed:
     blacklist.extend([
-        "sympy/utilities/benchmarking.py",
         "sympy/utilities/tmpfiles.py",
         "sympy/utilities/pytest.py",
         "sympy/utilities/runtests.py",
@@ -776,7 +775,7 @@ def _doctest(*paths, **kwargs):
     Returns 0 if tests passed and 1 if they failed.  See the docstrings of
     ``doctest()`` and ``test()`` for more information.
     """
-    from sympy import pprint_use_unicode
+    from sympy.printing.pretty.pretty import pprint_use_unicode
 
     normal = kwargs.get("normal", False)
     verbose = kwargs.get("verbose", False)
@@ -787,7 +786,7 @@ def _doctest(*paths, **kwargs):
 
     blacklist.extend(_get_doctest_blacklist())
 
-    # Use a non-windowed backend, so that the tests work on Travis
+    # Use a non-windowed backend, so that the tests work on CI
     if import_module('matplotlib') is not None:
         import matplotlib
         matplotlib.use('Agg')
@@ -824,6 +823,8 @@ def _doctest(*paths, **kwargs):
                     matched.append(f)
                     break
 
+    matched.sort()
+
     if split:
         matched = split_list(matched, split)
 
@@ -837,13 +838,15 @@ def _doctest(*paths, **kwargs):
 
     # N.B.
     # --------------------------------------------------------------------
-    # Here we test *.rst files at or below doc/src. Code from these must
-    # be self supporting in terms of imports since there is no importing
-    # of necessary modules by doctest.testfile. If you try to pass *.py
-    # files through this they might fail because they will lack the needed
-    # imports and smarter parsing that can be done with source code.
+    # Here we test *.rst and *.md files at or below doc/src. Code from these
+    # must be self supporting in terms of imports since there is no importing
+    # of necessary modules by doctest.testfile. If you try to pass *.py files
+    # through this they might fail because they will lack the needed imports
+    # and smarter parsing that can be done with source code.
     #
-    test_files = t.get_test_files('doc/src', '*.rst', init_only=False)
+    test_files_rst = t.get_test_files('doc/src', '*.rst', init_only=False)
+    test_files_md = t.get_test_files('doc/src', '*.md', init_only=False)
+    test_files = test_files_rst + test_files_md
     test_files.sort()
 
     not_blacklisted = [f for f in test_files
@@ -893,7 +896,7 @@ def _doctest(*paths, **kwargs):
             failed = rstfailed or failed
             if first_report:
                 first_report = False
-                msg = 'rst doctests start'
+                msg = 'rst/md doctests start'
                 if not t._testfiles:
                     r.start(msg=msg)
                 else:
@@ -1067,14 +1070,8 @@ def sympytestfile(filename, module_relative=True, name=None, package=None,
                          "relative paths.")
 
     # Relativize the path
-    if not PY3:
-        text, filename = pdoctest._load_testfile(
-            filename, package, module_relative)
-        if encoding is not None:
-            text = text.decode(encoding)
-    else:
-        text, filename = pdoctest._load_testfile(
-            filename, package, module_relative, encoding)
+    text, filename = pdoctest._load_testfile(
+        filename, package, module_relative, encoding)
 
     # If no name was given, then use the file's name.
     if name is None:
@@ -1098,7 +1095,7 @@ def sympytestfile(filename, module_relative=True, name=None, package=None,
 
     # Read the file, convert it to a test, and run it.
     test = parser.get_doctest(text, globs, name, filename, 0)
-    runner.run(test, compileflags=future_flags)
+    runner.run(test)
 
     if report:
         runner.summarize()
@@ -1111,7 +1108,7 @@ def sympytestfile(filename, module_relative=True, name=None, package=None,
     return SymPyTestResults(runner.failures, runner.tries)
 
 
-class SymPyTests(object):
+class SymPyTests:
 
     def __init__(self, reporter, kw="", post_mortem=False,
                  seed=None, fast_threshold=None, slow_threshold=None):
@@ -1201,17 +1198,14 @@ class SymPyTests(object):
         try:
             gl = {'__file__': filename}
             try:
-                if PY3:
-                    open_file = lambda: open(filename, encoding="utf8")
-                else:
-                    open_file = lambda: open(filename)
+                open_file = lambda: open(filename, encoding="utf8")
 
                 with open_file() as f:
                     source = f.read()
                     if self._kw:
                         for l in source.splitlines():
                             if l.lstrip().startswith('def '):
-                                if any(l.find(k) != -1 for k in self._kw):
+                                if any(l.lower().find(k.lower()) != -1 for k in self._kw):
                                     break
                         else:
                             return
@@ -1223,7 +1217,7 @@ class SymPyTests(object):
                         pass
 
                 code = compile(source, filename, "exec", flags=0, dont_inherit=True)
-                exec_(code, gl)
+                exec(code, gl)
             except (SystemExit, KeyboardInterrupt):
                 raise
             except ImportError:
@@ -1352,14 +1346,14 @@ class SymPyTests(object):
         if not self._kw:
             return True
         for kw in self._kw:
-            if x.__name__.find(kw) != -1:
+            if x.__name__.lower().find(kw.lower()) != -1:
                 return True
         return False
 
     def get_test_files(self, dir, pat='test_*.py'):
         """
         Returns the list of test_*.py (default) files at or below directory
-        ``dir`` relative to the sympy home directory.
+        ``dir`` relative to the SymPy home directory.
         """
         dir = os.path.join(self._root_dir, convert_to_native_paths([dir])[0])
 
@@ -1370,7 +1364,7 @@ class SymPyTests(object):
         return sorted([os.path.normcase(gi) for gi in g])
 
 
-class SymPyDocTests(object):
+class SymPyDocTests:
 
     def __init__(self, reporter, normal):
         self._count = 0
@@ -1398,9 +1392,9 @@ class SymPyDocTests(object):
     def test_file(self, filename):
         clear_cache()
 
-        from sympy.core.compatibility import StringIO
+        from io import StringIO
         import sympy.interactive.printing as interactive_printing
-        from sympy import pprint_use_unicode
+        from sympy.printing.pretty.pretty import pprint_use_unicode
 
         rel_name = filename[len(self._root_dir) + 1:]
         dirname, file = os.path.split(filename)
@@ -1448,12 +1442,13 @@ class SymPyDocTests(object):
                     self._reporter.test_skip(v=str(e))
                     continue
 
-            runner = SymPyDocTestRunner(optionflags=pdoctest.ELLIPSIS |
+            runner = SymPyDocTestRunner(verbose=self._reporter._verbose==2,
+                    optionflags=pdoctest.ELLIPSIS |
                     pdoctest.NORMALIZE_WHITESPACE |
                     pdoctest.IGNORE_EXCEPTION_DETAIL)
             runner._checker = SymPyOutputChecker()
             old = sys.stdout
-            new = StringIO()
+            new = old if self._reporter._verbose==2 else StringIO()
             sys.stdout = new
             # If the testing is normal, the doctests get importing magic to
             # provide the global namespace. If not normal (the default) then
@@ -1466,13 +1461,11 @@ class SymPyDocTests(object):
                 # if this is uncommented then all the test would get is what
                 # comes by default with a "from sympy import *"
                 #exec('from sympy import *') in test.globs
-            test.globs['print_function'] = print_function
-
             old_displayhook = sys.displayhook
             use_unicode_prev = setup_pprint()
 
             try:
-                f, t = runner.run(test, compileflags=future_flags,
+                f, t = runner.run(test,
                                   out=new.write, clear_globs=False)
             except KeyboardInterrupt:
                 raise
@@ -1553,11 +1546,10 @@ class SymPyDocTests(object):
             tempdir = tempfile.mkdtemp()
             os.environ['PATH'] = '%s:%s' % (tempdir, os.environ['PATH'])
 
-            vw = ('#!/usr/bin/env {}\n'
+            vw = ('#!/usr/bin/env python3\n'
                   'import sys\n'
                   'if len(sys.argv) <= 1:\n'
-                  '    exit("wrong number of args")\n').format(
-                      'python3' if PY3 else 'python')
+                  '    exit("wrong number of args")\n')
 
             for viewer in disable_viewers:
                 with open(os.path.join(tempdir, viewer), 'w') as fh:
@@ -1575,7 +1567,7 @@ class SymPyDocTests(object):
             # monkey-patch pyglet s.t. it does not open a window during
             # doctesting
             import pyglet
-            class DummyWindow(object):
+            class DummyWindow:
                 def __init__(self, *args, **kwargs):
                     self.has_exit = True
                     self.width = 600
@@ -1716,7 +1708,7 @@ class SymPyDocTestFinder(DocTestFinder):
 
         lineno = None
 
-        # Extract the object's docstring.  If it doesn't have one,
+        # Extract the object's docstring.  If it does not have one,
         # then return None (no test for this object).
         if isinstance(obj, str):
             # obj is a string in the case for objects in the polys package.
@@ -1820,6 +1812,13 @@ class SymPyDocTestRunner(DocTestRunner):
         """
         self.test = test
 
+        # Remove ``` from the end of example, which may appear in Markdown
+        # files
+        for example in test.examples:
+            example.want = example.want.replace('```\n', '')
+            example.exc_msg = example.exc_msg and example.exc_msg.replace('```\n', '')
+
+
         if compileflags is None:
             compileflags = pdoctest._extract_future_flags(test.globs)
 
@@ -1846,7 +1845,6 @@ class SymPyDocTestRunner(DocTestRunner):
         # Fail for deprecation warnings
         with raise_on_deprecated():
             try:
-                test.globs['print_function'] = print_function
                 return self.__run(test, compileflags, out)
             finally:
                 sys.stdout = save_stdout
@@ -1966,7 +1964,7 @@ class SymPyOutputChecker(pdoctest.OutputChecker):
         return False
 
 
-class Reporter(object):
+class Reporter:
     """
     Parent class for all reporters.
     """
@@ -2042,10 +2040,9 @@ class PyTestReporter(Reporter):
                 process = subprocess.Popen(['stty', '-a'],
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE)
-                stdout = process.stdout.read()
-                if PY3:
-                    stdout = stdout.decode("utf-8")
-            except (OSError, IOError):
+                stdout, stderr = process.communicate()
+                stdout = stdout.decode("utf-8")
+            except OSError:
                 pass
             else:
                 # We support the following output formats from stty:
@@ -2148,9 +2145,9 @@ class PyTestReporter(Reporter):
                 sys.stdout.write("\n")
 
         # Avoid UnicodeEncodeError when printing out test failures
-        if PY3 and IS_WINDOWS:
+        if IS_WINDOWS:
             text = text.encode('raw_unicode_escape').decode('utf8', 'ignore')
-        elif PY3 and not sys.stdout.encoding.lower().startswith('utf'):
+        elif not sys.stdout.encoding.lower().startswith('utf'):
             text = text.encode(sys.stdout.encoding, 'backslashreplace'
                               ).decode(sys.stdout.encoding)
 
@@ -2196,7 +2193,6 @@ class PyTestReporter(Reporter):
         self.write("architecture:       %s\n" % ARCH)
         from sympy.core.cache import USE_CACHE
         self.write("cache:              %s\n" % USE_CACHE)
-        from sympy.core.compatibility import GROUND_TYPES, HAS_GMPY
         version = ''
         if GROUND_TYPES =='gmpy':
             if HAS_GMPY == 1:

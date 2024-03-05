@@ -1,0 +1,16 @@
+#! /usr/bin/sh
+
+exec 2>&1
+
+set -e
+
+python3 setup.py test | tee test.log
+
+if [ "$(grep FAILED test.log| wc -l)" -lt 5 ]; then
+    echo "great, there were less than 5 errors"
+    true
+else
+    echo "Too many failures, take a look at the artifacts (stdout file)"
+    echo "============================================================="
+    false
+fi

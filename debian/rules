@@ -9,10 +9,15 @@ export PYBUILD_DESTDIR_python3=debian/python3-sympy/
 	dh  $@ --with python3,sphinxdoc --buildsystem=pybuild
 
 override_dh_auto_build:
-	dh_auto_build
-	faketime "`dpkg-parsechangelog -S date`" \
-		sh -c '(cd doc/; make html)'
+	# restore doc/inv with intersphinx inventories
+	tar xzf debian/intersphinx-inventories.tgz
 
+	# build the documentation in HTML format
+	faketime "`dpkg-parsechangelog -S date`" \
+		sh -c '(cd doc/; export SPHINXOPTS="-j auto"; $(MAKE) html)'
+	dh_auto_build
+
+DOCDIR = debian/python-sympy-doc/usr/share/doc/python-sympy-doc
 override_dh_auto_install:
 	dh_auto_install
 	mv debian/python3-sympy/usr/bin/isympy debian/isympy-common/usr/bin/
@@ -23,10 +28,15 @@ override_dh_auto_install:
 	# Get rid of embedded mpmath.  Unfortunately, we
 	# can't remove all files with quilt (empty files, for example).
 	rm -rf debian/python*-sympy/usr/lib/python*/dist-packages/sympy/mpmath/
+	# create the file version.json for the package python-sympy-doc
+	install -d $(DOCDIR)
+	v=$$(dpkg-parsechangelog --show-field Version| sed 's/-.*//'); \
+	  echo "{\"latest\": \"$$v\", \"dev\": \"$$v\"}" > \
+	    $(DOCDIR)/version.json
 
 override_dh_auto_clean:
 	dh_auto_clean
-	(cd doc/; make clean)
+	cd doc/; $(MAKE) clean; rm -rf src/inv
 	rm -rf sympy.egg-info
 
 override_dh_auto_test:

@@ -1,9 +1,25 @@
-from sympy import (Symbol, exp, Integer, Float, sin, cos, log, Poly, Lambda,
-    Function, I, S, sqrt, srepr, Rational, Tuple, Matrix, Interval, Add, Mul,
-    Pow, Or, true, false, Abs, pi, Range, Xor)
+from sympy.core.add import Add
+from sympy.core.containers import Tuple
+from sympy.core.function import (Function, Lambda)
+from sympy.core.mul import Mul
+from sympy.core.numbers import (Float, I, Integer, Rational, pi, oo)
+from sympy.core.power import Pow
+from sympy.core.singleton import S
+from sympy.core.symbol import Symbol
+from sympy.functions.elementary.complexes import Abs
+from sympy.functions.elementary.exponential import exp
+from sympy.functions.elementary.miscellaneous import sqrt
+from sympy.functions.elementary.trigonometric import (cos, sin)
+from sympy.logic.boolalg import (false, Or, true, Xor)
+from sympy.matrices.dense import Matrix
+from sympy.parsing.sympy_parser import null
+from sympy.polys.polytools import Poly
+from sympy.printing.repr import srepr
+from sympy.sets.fancysets import Range
+from sympy.sets.sets import Interval
 from sympy.abc import x, y
 from sympy.core.sympify import (sympify, _sympify, SympifyError, kernS,
-    CantSympify)
+    CantSympify, converter)
 from sympy.core.decorators import _sympifyit
 from sympy.external import import_module
 from sympy.testing.pytest import raises, XFAIL, skip, warns_deprecated_sympy
@@ -11,7 +27,7 @@ from sympy.utilities.decorator import conserve_mpmath_dps
 from sympy.geometry import Point, Line
 from sympy.functions.combinatorial.factorials import factorial, factorial2
 from sympy.abc import _clash, _clash1, _clash2
-from sympy.core.compatibility import exec_, HAS_GMPY
+from sympy.external.gmpy import HAS_GMPY
 from sympy.sets import FiniteSet, EmptySet
 from sympy.tensor.array.dense_ndim_array import ImmutableDenseNDimArray
 
@@ -35,10 +51,9 @@ def test_sympify1():
     assert sympify("   x") == Symbol("x")
     assert sympify("   x   ") == Symbol("x")
     # issue 4877
-    n1 = S.Half
-    assert sympify('--.5') == n1
-    assert sympify('-1/2') == -n1
-    assert sympify('-+--.5') == -n1
+    assert sympify('--.5') == 0.5
+    assert sympify('-1/2') == -S.Half
+    assert sympify('-+--.5') == -0.5
     assert sympify('-.[3]') == Rational(-1, 3)
     assert sympify('.[3]') == Rational(1, 3)
     assert sympify('+.[3]') == Rational(1, 3)
@@ -116,6 +131,7 @@ def test_sympify_mpmath():
     assert sympify(
         mpmath.pi).epsilon_eq(Float("3.14159"), Float("1e-6")) == False
 
+    mpmath.mp.dps = 15
     assert sympify(mpmath.mpc(1.0 + 2.0j)) == Float(1.0) + Float(2.0)*I
 
     assert sympify(mpq(1, 2)) == S.Half
@@ -162,7 +178,7 @@ def test_sympify_bool():
 def test_sympyify_iterables():
     ans = [Rational(3, 10), Rational(1, 5)]
     assert sympify(['.3', '.2'], rational=True) == ans
-    assert sympify(dict(x=0, y=1)) == {x: 0, y: 1}
+    assert sympify({"x": 0, "y": 1}) == {x: 0, y: 1}
     assert sympify(['1', '2', ['3', '4']]) == [S(1), S(2), [S(3), S(4)]]
 
 
@@ -173,7 +189,7 @@ def test_issue_16772():
     # along; list, on the other hand, is not converted
     # with a converter so its args are traversed later
     ans = [Rational(3, 10), Rational(1, 5)]
-    assert sympify(tuple(['.3', '.2']), rational=True) == Tuple(*ans)
+    assert sympify(('.3', '.2'), rational=True) == Tuple(*ans)
 
 
 def test_issue_16859():
@@ -235,19 +251,6 @@ def test_sympify_factorial():
     raises(SympifyError, lambda: sympify("!"))
     raises(SympifyError, lambda: sympify("(!)"))
     raises(SympifyError, lambda: sympify("x!!!"))
-
-
-def test_sage():
-    # how to effectivelly test for the _sage_() method without having SAGE
-    # installed?
-    assert hasattr(x, "_sage_")
-    assert hasattr(Integer(3), "_sage_")
-    assert hasattr(sin(x), "_sage_")
-    assert hasattr(cos(x), "_sage_")
-    assert hasattr(x**2, "_sage_")
-    assert hasattr(x + y, "_sage_")
-    assert hasattr(exp(x), "_sage_")
-    assert hasattr(log(x), "_sage_")
 
 
 def test_issue_3595():
@@ -404,7 +407,7 @@ def test_int_float():
     f1_1c = F1_1c()
     assert sympify(i5) == 5
     assert isinstance(sympify(i5), Integer)
-    assert sympify(i5b) == 5
+    assert sympify(i5b) == 5.0
     assert isinstance(sympify(i5b), Float)
     assert sympify(i5c) == 5
     assert isinstance(sympify(i5c), Integer)
@@ -414,7 +417,7 @@ def test_int_float():
 
     assert _sympify(i5) == 5
     assert isinstance(_sympify(i5), Integer)
-    assert _sympify(i5b) == 5
+    assert _sympify(i5b) == 5.0
     assert isinstance(_sympify(i5b), Float)
     assert _sympify(i5c) == 5
     assert isinstance(_sympify(i5c), Integer)
@@ -455,7 +458,7 @@ def test_issue_3982():
 
 
 def test_S_sympify():
-    assert S(1)/2 == sympify(1)/2
+    assert S(1)/2 == sympify(1)/2 == S.Half
     assert (-2)**(S(1)/2) == sqrt(2)*I
 
 
@@ -469,6 +472,14 @@ def test_issue_4798_None():
 
 def test_issue_3218():
     assert sympify("x+\ny") == x + y
+
+def test_issue_19399():
+    if not numpy:
+        skip("numpy not installed.")
+
+    a = numpy.array(Rational(1, 2))
+    b = Rational(1, 3)
+    assert (a * b, type(a * b)) == (b * a, type(b * a))
 
 
 def test_issue_4988_builtins():
@@ -530,10 +541,16 @@ def test_issue_6540_6552():
 def test_issue_6046():
     assert str(S("Q & C", locals=_clash1)) == 'C & Q'
     assert str(S('pi(x)', locals=_clash2)) == 'pi(x)'
-    assert str(S('pi(C, Q)', locals=_clash)) == 'pi(C, Q)'
     locals = {}
-    exec_("from sympy.abc import Q, C", locals)
+    exec("from sympy.abc import Q, C", locals)
     assert str(S('C&Q', locals)) == 'C & Q'
+    # clash can act as Symbol or Function
+    assert str(S('pi(C, Q)', locals=_clash)) == 'pi(C, Q)'
+    assert len(S('pi + x', locals=_clash2).free_symbols) == 2
+    # but not both
+    raises(TypeError, lambda: S('pi + pi(x)', locals=_clash2))
+    assert all(set(i.values()) == {null} for i in (
+        _clash, _clash1, _clash2))
 
 
 def test_issue_8821_highprec_from_str():
@@ -567,10 +584,10 @@ def test_issue_10295():
     assert sC[0, 0, 0] == 0
 
     a1 = numpy.array([1, 2, 3])
-    a2 = numpy.array([i for i in range(24)])
+    a2 = numpy.array(list(range(24)))
     a2.resize(2, 4, 3)
     assert sympify(a1) == ImmutableDenseNDimArray([1, 2, 3])
-    assert sympify(a2) == ImmutableDenseNDimArray([i for i in range(24)], (2, 4, 3))
+    assert sympify(a2) == ImmutableDenseNDimArray(list(range(24)), (2, 4, 3))
 
 
 def test_Range():
@@ -616,26 +633,87 @@ def test_sympify_numpy():
     assert equal(sympify(np.float32(1.123456)), Float(1.123456, precision=24))
     assert equal(sympify(np.float64(1.1234567891234)),
                 Float(1.1234567891234, precision=53))
+
+    # The exact precision of np.longdouble, npfloat128 and other extended
+    # precision dtypes is platform dependent.
+    ldprec = np.finfo(np.longdouble(1)).nmant + 1
     assert equal(sympify(np.longdouble(1.123456789)),
-                 Float(1.123456789, precision=80))
+                 Float(1.123456789, precision=ldprec))
+
     assert equal(sympify(np.complex64(1 + 2j)), S(1.0 + 2.0*I))
     assert equal(sympify(np.complex128(1 + 2j)), S(1.0 + 2.0*I))
-    assert equal(sympify(np.longcomplex(1 + 2j)), S(1.0 + 2.0*I))
+
+    lcprec = np.finfo(np.longcomplex(1)).nmant + 1
+    assert equal(sympify(np.longcomplex(1 + 2j)),
+                Float(1.0, precision=lcprec) + Float(2.0, precision=lcprec)*I)
 
     #float96 does not exist on all platforms
     if hasattr(np, 'float96'):
+        f96prec = np.finfo(np.float96(1)).nmant + 1
         assert equal(sympify(np.float96(1.123456789)),
-                    Float(1.123456789, precision=80))
+                    Float(1.123456789, precision=f96prec))
+
     #float128 does not exist on all platforms
     if hasattr(np, 'float128'):
+        f128prec = np.finfo(np.float128(1)).nmant + 1
         assert equal(sympify(np.float128(1.123456789123)),
-                    Float(1.123456789123, precision=80))
+                    Float(1.123456789123, precision=f128prec))
 
 
 @XFAIL
 def test_sympify_rational_numbers_set():
     ans = [Rational(3, 10), Rational(1, 5)]
     assert sympify({'.3', '.2'}, rational=True) == FiniteSet(*ans)
+
+
+def test_sympify_mro():
+    """Tests the resolution order for classes that implement _sympy_"""
+    class a:
+        def _sympy_(self):
+            return Integer(1)
+    class b(a):
+        def _sympy_(self):
+            return Integer(2)
+    class c(a):
+        pass
+
+    assert sympify(a()) == Integer(1)
+    assert sympify(b()) == Integer(2)
+    assert sympify(c()) == Integer(1)
+
+
+def test_sympify_converter():
+    """Tests the resolution order for classes in converter"""
+    class a:
+        pass
+    class b(a):
+        pass
+    class c(a):
+        pass
+
+    converter[a] = lambda x: Integer(1)
+    converter[b] = lambda x: Integer(2)
+
+    assert sympify(a()) == Integer(1)
+    assert sympify(b()) == Integer(2)
+    assert sympify(c()) == Integer(1)
+
+    class MyInteger(Integer):
+        pass
+
+    if int in converter:
+        int_converter = converter[int]
+    else:
+        int_converter = None
+
+    try:
+        converter[int] = MyInteger
+        assert sympify(1) == MyInteger(1)
+    finally:
+        if int_converter is None:
+            del converter[int]
+        else:
+            converter[int] = int_converter
 
 
 def test_issue_13924():
@@ -712,26 +790,32 @@ def test_issue_17811():
     assert sympify('a(x)*5', evaluate=False) == Mul(a(x), 5, evaluate=False)
 
 
+def test_issue_8439():
+    assert sympify(float('inf')) == oo
+    assert x + float('inf') == x + oo
+    assert S(float('inf')) == oo
+
+
 def test_issue_14706():
     if not numpy:
         skip("numpy not installed.")
 
-    z1 = numpy.zeros((1, 1), dtype=numpy.float)
-    z2 = numpy.zeros((2, 2), dtype=numpy.float)
-    z3 = numpy.zeros((), dtype=numpy.float)
+    z1 = numpy.zeros((1, 1), dtype=numpy.float64)
+    z2 = numpy.zeros((2, 2), dtype=numpy.float64)
+    z3 = numpy.zeros((), dtype=numpy.float64)
 
-    y1 = numpy.ones((1, 1), dtype=numpy.float)
-    y2 = numpy.ones((2, 2), dtype=numpy.float)
-    y3 = numpy.ones((), dtype=numpy.float)
+    y1 = numpy.ones((1, 1), dtype=numpy.float64)
+    y2 = numpy.ones((2, 2), dtype=numpy.float64)
+    y3 = numpy.ones((), dtype=numpy.float64)
 
     assert numpy.all(x + z1 == numpy.full((1, 1), x))
     assert numpy.all(x + z2 == numpy.full((2, 2), x))
     assert numpy.all(z1 + x == numpy.full((1, 1), x))
     assert numpy.all(z2 + x == numpy.full((2, 2), x))
     for z in [z3,
-              numpy.int(0),
-              numpy.float(0),
-              numpy.complex(0)]:
+              numpy.int64(0),
+              numpy.float64(0),
+              numpy.complex64(0)]:
         assert x + z == x
         assert z + x == x
         assert isinstance(x + z, Symbol)
@@ -749,9 +833,9 @@ def test_issue_14706():
     assert numpy.all(y1 + x == numpy.full((1, 1), x + 1.0))
     assert numpy.all(y2 + x == numpy.full((2, 2), x + 1.0))
     for y_ in [y3,
-              numpy.int(1),
-              numpy.float(1),
-              numpy.complex(1)]:
+              numpy.int64(1),
+              numpy.float64(1),
+              numpy.complex64(1)]:
         assert x + y_ == y_ + x
         assert isinstance(x + y_, Add)
         assert isinstance(y_ + x, Add)
@@ -761,11 +845,37 @@ def test_issue_14706():
 
     assert sympify(numpy.array([1])) == ImmutableDenseNDimArray([1], 1)
     assert sympify(numpy.array([[[1]]])) == ImmutableDenseNDimArray([1], (1, 1, 1))
-    assert sympify(z1) == ImmutableDenseNDimArray([0], (1, 1))
-    assert sympify(z2) == ImmutableDenseNDimArray([0, 0, 0, 0], (2, 2))
-    assert sympify(z3) == ImmutableDenseNDimArray([0], ())
+    assert sympify(z1) == ImmutableDenseNDimArray([0.0], (1, 1))
+    assert sympify(z2) == ImmutableDenseNDimArray([0.0, 0.0, 0.0, 0.0], (2, 2))
+    assert sympify(z3) == ImmutableDenseNDimArray([0.0], ())
     assert sympify(z3, strict=True) == 0.0
 
     raises(SympifyError, lambda: sympify(numpy.array([1]), strict=True))
     raises(SympifyError, lambda: sympify(z1, strict=True))
     raises(SympifyError, lambda: sympify(z2, strict=True))
+
+
+def test_issue_21536():
+    #test to check evaluate=False in case of iterable input
+    u = sympify("x+3*x+2", evaluate=False)
+    v = sympify("2*x+4*x+2+4", evaluate=False)
+
+    assert u.is_Add and set(u.args) == {x, 3*x, 2}
+    assert v.is_Add and set(v.args) == {2*x, 4*x, 2, 4}
+    assert sympify(["x+3*x+2", "2*x+4*x+2+4"], evaluate=False) == [u, v]
+
+    #test to check evaluate=True in case of iterable input
+    u = sympify("x+3*x+2", evaluate=True)
+    v = sympify("2*x+4*x+2+4", evaluate=True)
+
+    assert u.is_Add and set(u.args) == {4*x, 2}
+    assert v.is_Add and set(v.args) == {6*x, 6}
+    assert sympify(["x+3*x+2", "2*x+4*x+2+4"], evaluate=True) == [u, v]
+
+    #test to check evaluate with no input in case of iterable input
+    u = sympify("x+3*x+2")
+    v = sympify("2*x+4*x+2+4")
+
+    assert u.is_Add and set(u.args) == {4*x, 2}
+    assert v.is_Add and set(v.args) == {6*x, 6}
+    assert sympify(["x+3*x+2", "2*x+4*x+2+4"]) == [u, v]
