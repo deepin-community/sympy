@@ -125,7 +125,7 @@ def test_Permutation():
     assert Permutation.from_inversion_vector(q.inversion_vector()).array_form\
         == q.array_form
     raises(ValueError, lambda: Permutation.from_inversion_vector([0, 2]))
-    assert Permutation([i for i in range(500, -1, -1)]).inversions() == 125250
+    assert Permutation(list(range(500, -1, -1))).inversions() == 125250
 
     s = Permutation([0, 4, 1, 3, 2])
     assert s.parity() == 0
@@ -473,7 +473,6 @@ def test_printing_cyclic():
 
 
 def test_printing_non_cyclic():
-    from sympy.printing import sstr, srepr
     p1 = Permutation([0, 1, 2, 3, 4, 5])
     assert srepr(p1, perm_cyclic=False) == 'Permutation([], size=6)'
     assert sstr(p1, perm_cyclic=False) == 'Permutation([], size=6)'

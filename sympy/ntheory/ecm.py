@@ -1,6 +1,7 @@
 from sympy.ntheory import sieve, isprime
+from sympy.core.numbers import mod_inverse
 from sympy.core.power import integer_log
-from sympy.core.compatibility import as_int
+from sympy.utilities.misc import as_int
 import random
 
 rgen = random.Random()
@@ -27,15 +28,15 @@ class Point:
     References
     ==========
 
-    .. [1]  http://www.hyperelliptic.org/tanja/SHARCS/talks06/Gaj.pdf
+    .. [1]  https://www.hyperelliptic.org/tanja/SHARCS/talks06/Gaj.pdf
     """
 
     def __init__(self, x_cord, z_cord, a_24, mod):
         """
         Initial parameters for the Point class.
 
-        Parameters:
-        ===========
+        Parameters
+        ==========
 
         x_cord : X coordinate of the Point
         z_cord : Z coordinate of the Point
@@ -50,26 +51,25 @@ class Point:
     def __eq__(self, other):
         """Two points are equal if X/Z of both points are equal
         """
-        from sympy import mod_inverse
         if self.a_24 != other.a_24 or self.mod != other.mod:
             return False
-        return self.x_cord * mod_inverse(self.z_cord, self.mod) % self.mod ==\
-            other.x_cord * mod_inverse(other.z_cord, self.mod) % self.mod
+        return self.x_cord * other.z_cord % self.mod ==\
+            other.x_cord * self.z_cord % self.mod
 
     def add(self, Q, diff):
         """
         Add two points self and Q where diff = self - Q. Moreover the assumption
         is self.x_cord*Q.x_cord*(self.x_cord - Q.x_cord) != 0. This algorithm
         requires 6 multiplications. Here the difference between the points
-        is already known and using this algorihtm speeds up the addition
+        is already known and using this algorithm speeds up the addition
         by reducing the number of multiplication required. Also in the
         mont_ladder algorithm is constructed in a way so that the difference
         between intermediate points is always equal to the initial point.
         So, we always know what the difference between the point is.
 
 
-        Parameters:
-        ===========
+        Parameters
+        ==========
 
         Q : point on the curve in Montgomery form
         diff : self - Q
@@ -109,8 +109,8 @@ class Point:
         >>> p2.z_cord
         10
         """
-        u, v = self.x_cord + self.z_cord, self.x_cord - self.z_cord
-        u, v = u*u, v*v
+        u = pow(self.x_cord + self.z_cord, 2, self.mod)
+        v = pow(self.x_cord - self.z_cord, 2, self.mod)
         diff = u - v
         x_cord = u*v % self.mod
         z_cord = diff*(v + self.a_24*diff) % self.mod
@@ -123,7 +123,7 @@ class Point:
         A total of 11 multiplications are required in each step of this
         algorithm.
 
-        Parameters:
+        Parameters
         ==========
 
         k : The positive integer multiplier
@@ -179,8 +179,8 @@ def _ecm_one_factor(n, B1=10000, B2=100000, max_curve=200):
     scalar multiplication by p to get p*k*P = O. Here a second bound B2
     restrict the size of possible values of p.
 
-    Parameters:
-    ===========
+    Parameters
+    ==========
 
     n : Number to be Factored
     B1 : Stage 1 Bound
@@ -193,7 +193,6 @@ def _ecm_one_factor(n, B1=10000, B2=100000, max_curve=200):
     .. [1]  Carl Pomerance and Richard Crandall "Prime Numbers:
         A Computational Perspective" (2nd Ed.), page 344
     """
-    from sympy import gcd, mod_inverse, sqrt
     n = as_int(n)
     if B1 % 2 != 0 or B2 % 2 != 0:
         raise ValueError("The Bounds should be an even integer")
@@ -202,33 +201,36 @@ def _ecm_one_factor(n, B1=10000, B2=100000, max_curve=200):
     if isprime(n):
         return n
 
-    curve = 0
+    from sympy.functions.elementary.miscellaneous import sqrt
+    from sympy.polys.polytools import gcd
     D = int(sqrt(B2))
     beta = [0]*(D + 1)
     S = [0]*(D + 1)
     k = 1
     for p in sieve.primerange(1, B1 + 1):
         k *= pow(p, integer_log(B1, p)[0])
-    g = 1
-
-    while(curve <= max_curve):
-        curve += 1
-
-        #Suyama's Paramatrization
+    for _ in range(max_curve):
+        #Suyama's Parametrization
         sigma = rgen.randint(6, n - 1)
         u = (sigma*sigma - 5) % n
         v = (4*sigma) % n
-        diff = v - u
         u_3 = pow(u, 3, n)
 
         try:
-            C = (pow(diff, 3, n)*(3*u + v)*mod_inverse(4*u_3*v, n) - 2) % n
+            # We use the elliptic curve y**2 = x**3 + a*x**2 + x
+            # where a = pow(v - u, 3, n)*(3*u + v)*mod_inverse(4*u_3*v, n) - 2
+            # However, we do not declare a because it is more convenient
+            # to use a24 = (a + 2)*mod_inverse(4, n) in the calculation.
+            a24 = pow(v - u, 3, n)*(3*u + v)*mod_inverse(16*u_3*v, n) % n
         except ValueError:
-            #If the mod_inverse(4*u_3*v, n) doesn't exist
-            return gcd(4*u_3*v, n)
+            #If the mod_inverse(16*u_3*v, n) doesn't exist (i.e., g != 1)
+            g = gcd(16*u_3*v, n)
+            #If g = n, try another curve
+            if g == n:
+                continue
+            return g
 
-        a24 = (C + 2)*mod_inverse(4, n) % n
-        Q = Point(u_3 , pow(v, 3, n), a24, n)
+        Q = Point(u_3, pow(v, 3, n), a24, n)
         Q = Q.mont_ladder(k)
         g = gcd(Q.z_cord, n)
 
@@ -258,8 +260,10 @@ def _ecm_one_factor(n, B1=10000, B2=100000, max_curve=200):
             alpha = (R.x_cord*R.z_cord) % n
             for q in sieve.primerange(r + 2, r + 2*D + 1):
                 delta = (q - r) // 2
-                f = (R.x_cord - S[d].x_cord)*(R.z_cord + S[d].z_cord) -\
-                alpha + beta[delta]
+                # We want to calculate
+                # f = R.x_cord * S[delta].z_cord - S[delta].x_cord * R.z_cord
+                f = (R.x_cord - S[delta].x_cord)*\
+                    (R.z_cord + S[delta].z_cord) - alpha + beta[delta]
                 g = (g*f) % n
             #Swap
             T, R = R, R.add(S[D], T)
@@ -280,8 +284,8 @@ def ecm(n, B1=10000, B2=100000, max_curve=200, seed=1234):
     of n. First all the small factors are taken out using trial division.
     Then `ecm_one_factor` is used to compute one factor at a time.
 
-    Parameters:
-    ===========
+    Parameters
+    ==========
 
     n : Number to be Factored
     B1 : Stage 1 Bound

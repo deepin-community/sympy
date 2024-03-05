@@ -11,12 +11,14 @@ Index: sympy/doc/Makefile
  RST2HTML     = rst2html
  
  # You can set these variables from the command line.
-@@ -44,7 +44,7 @@ clean:
- 	-rm -rf sphinx
- 	-rm -f $(PDFFILES)
+@@ -74,7 +74,9 @@ _html: $(BUILDDIR)/logo/sympy-notailtext
+ printwarnings:
+ 	@printf "\033[0;31mThe docs build failed with the following errors:\033[0m\n"
+ 	@cat $(WARNINGSFILE)
+-	exit 1
++	# ignore warnings, for a debian package build
++	# exit 1
++
  
--html: SPHINXOPTS += -W --keep-going
-+#html: SPHINXOPTS += -W --keep-going
- html: _build/logo/sympy-notailtext-favicon.ico
- 	mkdir -p src/.static
- 	mkdir -p _build/html
+ $(BUILDDIR)/html/pics/*.png: $(SOURCEDIR)/pics/*.png
+ 	mkdir -p $(BUILDDIR)/html
