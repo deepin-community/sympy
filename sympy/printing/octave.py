@@ -10,12 +10,12 @@ complete source code files.
 
 """
 
-from __future__ import print_function, division
-
-from typing import Any, Dict
+from __future__ import annotations
+from typing import Any
 
 from sympy.core import Mul, Pow, S, Rational
 from sympy.core.mul import _keep_coeff
+from sympy.core.numbers import equal_valued
 from sympy.printing.codeprinter import CodePrinter
 from sympy.printing.precedence import precedence, PRECEDENCE
 from re import search
@@ -32,7 +32,7 @@ known_fcns_src1 = ["sin", "cos", "tan", "cot", "sec", "csc",
                    "fresnelc", "fresnels", "gamma", "harmonic", "log",
                    "polylog", "sign", "zeta", "legendre"]
 
-# These functions have different names ("Sympy": "Octave"), more
+# These functions have different names ("SymPy": "Octave"), more
 # generally a mapping to (argument_conditions, octave_function).
 known_fcns_src2 = {
     "Abs": "abs",
@@ -75,7 +75,7 @@ class OctaveCodePrinter(CodePrinter):
         'not': '~',
     }
 
-    _default_settings = {
+    _default_settings: dict[str, Any] = {
         'order': None,
         'full_prec': 'auto',
         'precision': 17,
@@ -84,14 +84,14 @@ class OctaveCodePrinter(CodePrinter):
         'allow_unknown_functions': False,
         'contract': True,
         'inline': True,
-    }  # type: Dict[str, Any]
+    }
     # Note: contract is for expressing tensors as loops (if True), or just
     # assignment (if False).  FIXME: this should be looked a more carefully
     # for Octave.
 
 
     def __init__(self, settings={}):
-        super(OctaveCodePrinter, self).__init__(settings)
+        super().__init__(settings)
         self.known_functions = dict(zip(known_fcns_src1, known_fcns_src1))
         self.known_functions.update(dict(known_fcns_src2))
         userfuncs = settings.get('user_functions', {})
@@ -107,11 +107,11 @@ class OctaveCodePrinter(CodePrinter):
 
 
     def _get_comment(self, text):
-        return "% {0}".format(text)
+        return "% {}".format(text)
 
 
     def _declare_number_const(self, name, value):
-        return "{0} = {1};".format(name, value)
+        return "{} = {};".format(name, value)
 
 
     def _format_code(self, lines):
@@ -206,7 +206,7 @@ class OctaveCodePrinter(CodePrinter):
             divsym = '/' if b[0].is_number else './'
             return sign + multjoin(a, a_str) + divsym + b_str[0]
         else:
-            divsym = '/' if all([bi.is_number for bi in b]) else './'
+            divsym = '/' if all(bi.is_number for bi in b) else './'
             return (sign + multjoin(a, a_str) +
                     divsym + "(%s)" % multjoin(b, b_str))
 
@@ -214,21 +214,21 @@ class OctaveCodePrinter(CodePrinter):
         lhs_code = self._print(expr.lhs)
         rhs_code = self._print(expr.rhs)
         op = expr.rel_op
-        return "{0} {1} {2}".format(lhs_code, op, rhs_code)
+        return "{} {} {}".format(lhs_code, op, rhs_code)
 
     def _print_Pow(self, expr):
-        powsymbol = '^' if all([x.is_number for x in expr.args]) else '.^'
+        powsymbol = '^' if all(x.is_number for x in expr.args) else '.^'
 
         PREC = precedence(expr)
 
-        if expr.exp == S.Half:
+        if equal_valued(expr.exp, 0.5):
             return "sqrt(%s)" % self._print(expr.base)
 
         if expr.is_commutative:
-            if expr.exp == -S.Half:
+            if equal_valued(expr.exp, -0.5):
                 sym = '/' if expr.base.is_number else './'
                 return "1" + sym + "sqrt(%s)" % self._print(expr.base)
-            if expr.exp == -S.One:
+            if equal_valued(expr.exp, -1):
                 sym = '/' if expr.base.is_number else './'
                 return "1" + sym + "%s" % self.parenthesize(expr.base, PREC)
 
@@ -309,6 +309,7 @@ class OctaveCodePrinter(CodePrinter):
         return '{' + ', '.join(self._print(a) for a in expr) + '}'
     _print_tuple = _print_list
     _print_Tuple = _print_list
+    _print_List = _print_list
 
 
     def _print_BooleanTrue(self, expr):
@@ -331,7 +332,7 @@ class OctaveCodePrinter(CodePrinter):
         # Handle zero dimensions:
         if (A.rows, A.cols) == (0, 0):
             return '[]'
-        elif A.rows == 0 or A.cols == 0:
+        elif S.Zero in A.shape:
             return 'zeros(%s, %s)' % (A.rows, A.cols)
         elif (A.rows, A.cols) == (1, 1):
             # Octave does not distinguish between scalars and 1x1 matrices
@@ -340,7 +341,7 @@ class OctaveCodePrinter(CodePrinter):
                                   for r in range(A.rows))
 
 
-    def _print_SparseMatrix(self, A):
+    def _print_SparseRepMatrix(self, A):
         from sympy.matrices import Matrix
         L = A.col_list();
         # make row vectors of the indices and entries
@@ -408,7 +409,6 @@ class OctaveCodePrinter(CodePrinter):
             shape = [shape[0]]
         s = ", ".join(self._print(n) for n in shape)
         return "eye(" + s + ")"
-
 
     def _print_lowergamma(self, expr):
         # Octave implements regularized incomplete gamma function
@@ -555,15 +555,15 @@ class OctaveCodePrinter(CodePrinter):
         # pre-strip left-space from the code
         code = [ line.lstrip(' \t') for line in code ]
 
-        increase = [ int(any([search(re, line) for re in inc_regex]))
+        increase = [ int(any(search(re, line) for re in inc_regex))
                      for line in code ]
-        decrease = [ int(any([search(re, line) for re in dec_regex]))
+        decrease = [ int(any(search(re, line) for re in dec_regex))
                      for line in code ]
 
         pretty = []
         level = 0
         for n, line in enumerate(code):
-            if line == '' or line == '\n':
+            if line in ('', '\n'):
                 pretty.append(line)
                 continue
             level -= decrease[n]
@@ -581,7 +581,7 @@ def octave_code(expr, assign_to=None, **settings):
     ==========
 
     expr : Expr
-        A sympy expression to be converted.
+        A SymPy expression to be converted.
     assign_to : optional
         When given, the argument is used as the name of the variable to which
         the expression is assigned.  Can be a string, ``Symbol``,

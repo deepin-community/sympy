@@ -1,0 +1,7 @@
+Tests: run_test
+Depends:
+ python3-all,
+ python3-setuptools,
+ python3-numpy,
+ python3-matplotlib,
+ @

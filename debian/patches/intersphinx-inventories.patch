@@ -1,0 +1,19 @@
+Index: sympy/doc/src/conf.py
+===================================================================
+--- sympy.orig/doc/src/conf.py
++++ sympy/doc/src/conf.py
+@@ -395,10 +395,10 @@ graphviz_output_format = 'svg'
+ 
+ # Enable links to other packages
+ intersphinx_mapping = {
+-    'matplotlib': ('https://matplotlib.org/stable/', None),
+-    'mpmath': ('https://mpmath.org/doc/current/', None),
+-    "scipy": ("https://docs.scipy.org/doc/scipy/", None),
+-    "numpy": ("https://numpy.org/doc/stable/", None),
++    'matplotlib': ('inv/matplotlib', None),
++    'mpmath': ('inv/mpmath', None),
++    "scipy": ("inv/scipy", None),
++    "numpy": ("inv/numpy", None),
+ }
+ # Require :external: to reference intersphinx. Prevents accidentally linking
+ # to something from matplotlib.
